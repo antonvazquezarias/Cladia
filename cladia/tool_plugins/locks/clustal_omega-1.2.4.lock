@@ -1,0 +1,9 @@
+# platform: linux-64
+@EXPLICIT
+https://conda.anaconda.org/conda-forge/linux-64/libgomp-16.2.0-he0feb66_7.conda#d904c7ddd95e026254b4b80808ee9e12
+https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda#a9f577daf3de00bca7c3c76c0ecbd1de
+https://conda.anaconda.org/conda-forge/linux-64/libgcc-16.2.0-ha9f2e26_7.conda#735629b400b70eeab21a2ba8f5b1c2ce
+https://conda.anaconda.org/conda-forge/linux-64/libgcc-ng-16.2.0-h69a702a_7.conda#2005515ac9340f816fb2ac7e83afe553
+https://conda.anaconda.org/conda-forge/linux-64/argtable2-2.13-hd590300_1004.conda#d7d089e975b1213c2a0f94e592b7b422
+https://conda.anaconda.org/conda-forge/linux-64/libstdcxx-16.2.0-h934c35e_7.conda#9b6707e0caca917fa6ea9ee473f37a5d
+https://conda.anaconda.org/bioconda/linux-64/clustalo-1.2.4-h503566f_10.conda#c418f68c70b876a5d6f0463b42226aa3

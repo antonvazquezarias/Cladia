@@ -1,0 +1,946 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cladia</title>
+  <link rel="icon" href="cladia.ico">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <!-- ── Sidebar: sequence list and jobs ─────────────────────────────── -->
+  <aside id="sidebar">
+    <div id="sidebar-edge" title="Drag to make the list wider or narrower (double-click: back to the usual width)"></div>
+    <header><h1>Cladia</h1><span><button id="help-button" class="icon" title="User guide (opens in your browser)">?</button><button id="settings-button" class="icon" title="Settings">⚙</button></span></header>
+    <div class="add">
+      <div class="add-buttons">
+        <button id="add-files" title="Import files from this PC">Import…</button>
+        <button id="add-download" title="Download records from GenBank">Download…</button>
+      </div>
+      <div class="hint">or drag files onto the window. Cladia works on copies;
+        your original files are never changed.</div>
+      <input id="gff-input" type="file" hidden accept=".gff,.gff3,.gtf,.bed,.bedgraph,.bg,.wig,.txt">
+      <input id="file-input" type="file" multiple hidden accept=".gff,.gff3,.gtf,.bed,.bedgraph,.bg,.wig,.vcf,.bam,.sam,.dna,.xml,.phyloxml,.fastg,.gb,.gbk,.gbff,.genbank,.gpff,.fasta,.fa,.fna,.faa,.ffn,.frn,.fas,.fsa,.mfa,.afa,.afasta,.aln,.clustal,.seq,.txt,.nwk,.newick,.tre,.tree,.treefile,.contree,.nex,.nexus,.phy,.phylip,.sto,.stk,.embl,.gfa,.gz">
+    </div>
+    <div id="folder-picker"><button id="folder-button"></button></div>
+    <div id="folder-popup" class="menu" hidden>
+      <input autocomplete="off" id="folder-filter" type="search" placeholder="Folder name">
+      <ul id="folder-tree" role="tree" aria-label="Library folders"></ul>
+      <p id="folder-empty" class="muted" hidden>No matching folders.</p>
+      <hr>
+      <button id="folder-new" type="button" title="A new folder in the one shown; drop items here to put them in it"></button>
+    </div>
+    <div id="filter-row">
+      <input autocomplete="off" id="filter" type="search" placeholder="Search all folders">
+      <button id="show-descriptions" class="secondary" title="Show each sequence's description under its name">Descriptions</button>
+    </div>
+
+    <section id="lists" class="grow" tabindex="0">
+      <h2>Sequences</h2>
+      <ul id="sequences" class="file-list"></ul>
+      <h2>Alignments</h2>
+      <ul id="alignments" class="file-list"></ul>
+      <h2>Genome comparisons</h2>
+      <ul id="comparisons" class="file-list"></ul>
+      <h2>Reads</h2>
+      <ul id="reads" class="file-list"></ul>
+      <h2>Mappings</h2>
+      <ul id="mappings" class="file-list"></ul>
+      <h2>Trees</h2>
+      <ul id="trees" class="file-list"></ul>
+      <h2>Assembly graphs</h2>
+      <ul id="graphs" class="file-list"></ul>
+      <h2>Figures</h2>
+      <ul id="figures" class="file-list"></ul>
+      <h2>Variants</h2>
+      <ul id="variants" class="file-list"></ul>
+      <h2>BLAST results</h2>
+      <ul id="blasts" class="file-list"></ul>
+      <h2>Primer designs</h2>
+      <ul id="primers" class="file-list"></ul>
+      <h2>In-silico PCR</h2>
+      <ul id="pcrs" class="file-list"></ul>
+      <p class="hint">Click to open · Ctrl+click or Shift+click to select several · right-click for more (rename, duplicate, export…) · Ctrl+V pastes a copied sequence as a new one</p>
+    </section>
+
+    <section class="jobs">
+      <h2>Jobs <span class="job-links"><a id="clear-jobs" hidden title="Take the finished jobs off this list (their logs stay in the archive)">Clear</a><a id="open-archive" title="Every job's log, also from earlier sessions">Archive…</a></span></h2>
+      <ul id="jobs-active" class="job-list"></ul>
+      <ul id="jobs" class="job-list"></ul>
+    </section>
+  </aside>
+
+  <!-- ── Main area: tools on top, sequences below ────────────────────── -->
+  <main>
+    <!-- Tools: jobs that make new items. The viewer's own bar is below. -->
+    <nav id="toolbar">
+      <span class="bar-label">Run a tool</span>
+      <span id="jobs-running"></span>
+    </nav>
+
+    <!-- The viewer's bar, one row: the title, then the controls in groups (Zoom, Edit,
+         Find, Selection, View), then what opens other views of the item -->
+    <div id="viewbar" hidden>
+      <div id="view-head">
+        <button id="graph-back" class="secondary" hidden title="Back to the graph, this track's node selected">◀ Graph</button>
+        <button id="figure-back" class="secondary" hidden></button>
+        <span id="view-note"></span>
+        <span class="group" id="view-figure" hidden><span class="group-label">Figure</span>
+          <button id="view-figure-button" class="secondary" title="Make a figure of it for a paper (SVG, PDF, PNG, TIFF)">New ▾</button>
+        </span>
+      </div>
+      <div id="seq-controls" class="groups" hidden>
+        <span class="group" id="group-edit"><span class="group-label">Edit</span>
+          <button id="seq-lock" class="secondary icon-button lock" title="Read only: click to edit"></button>
+          <button id="seq-save" disabled title="Save the changes (Ctrl+S)">Save</button>
+          <button id="seq-undo" class="secondary icon-button" data-icon="undo" disabled title="Undo (Ctrl+Z)" aria-label="Undo"></button>
+          <button id="seq-redo" class="secondary icon-button" data-icon="redo" disabled title="Redo (Ctrl+Y)" aria-label="Redo"></button>
+          <button id="seq-curate" class="secondary" title="Changes to the whole item: orientation, origin, topology, annotations…">Curate ▾</button>
+        </span>
+        <span class="group" id="seq-sort-group" hidden><span class="group-label">Order</span>
+          <button id="seq-sort" class="secondary" title="Sort the sequences; the order is saved for tools and Export">Sort ▾</button>
+        </span>
+        <span class="group"><span class="group-label">Find</span>
+          <input autocomplete="off" id="seq-find" type="search" placeholder="Motif or name" title="A motif in the sequences (gaps ignored, both strands), a sequence name or a feature name; Enter for the next">
+          <button id="seq-prev" class="secondary icon-button" data-icon="prev" disabled title="Previous match" aria-label="Previous match"></button>
+          <button id="seq-next" class="secondary icon-button" data-icon="next" disabled title="Next match" aria-label="Next match"></button>
+          <span id="seq-found" class="muted"></span>
+        </span>
+        <span class="group" id="seq-view-group"><span class="group-label">View</span>
+          <div class="segmented" id="seq-map" title="Map type">
+            <button data-seqmap="circular">Circular</button>
+            <button data-seqmap="linear">Linear</button>
+          </div>
+          <span class="dropdown">
+            <button id="seq-show" class="secondary" title="What the viewer shows">Show ▾</button>
+            <div id="show-panel" class="menu" hidden>
+              <label class="toggle" id="seq-reads-label" hidden><input type="checkbox" id="seq-reads"> Mapped reads</label>
+              <section class="show-section" id="seq-annotation-options" aria-label="Annotations">
+                <label class="toggle" id="seq-features-label"><input type="checkbox" id="seq-features"> Features</label>
+                <div id="seq-types" class="types-row"></div>
+                <label class="toggle" id="seq-translations-label"><input type="checkbox" id="seq-translations"> Translations</label>
+                <label id="seq-code-label" class="code-row" title="Right-click the viewer to save a genetic code in the sequence">Genetic code for translations
+                  <select id="seq-code"></select></label>
+              </section>
+              <section class="show-section" id="seq-variant-options" aria-label="Variants" hidden>
+                <label class="toggle" title="Variant sites from the attached VCF, relative to its reference row"><input type="checkbox" id="seq-variants"> Variant sites</label>
+              </section>
+              <section class="show-section" id="seq-strand-options" aria-label="Sequence">
+                <label class="toggle" id="seq-complement-label" title="The complementary strand under the sequence, when zoomed in"><input type="checkbox" id="seq-complement"> Complementary strand</label>
+              </section>
+              <section class="show-section" id="seq-label-options" aria-label="Names">
+                <div class="show-heading" title="What the names column shows; drag its edge to make it wider">Names</div>
+                <div id="seq-label-fields" class="types-row"></div>
+              </section>
+              <section class="show-section" id="seq-gc-controls" aria-label="Composition" hidden>
+                <div class="show-heading">Composition</div>
+                <label class="toggle" title="GC fraction of called bases; the line marks this genome's mean"><input type="checkbox" id="seq-gc"> GC content</label>
+                <label class="toggle" title="(G − C) / (G + C): positive when G exceeds C"><input type="checkbox" id="seq-gc-skew"> GC skew</label>
+                <div id="seq-gc-options" class="show-fields" hidden>
+                  <label>Window (bp)<select id="seq-gc-window"><option value="0">Auto</option><option>50</option><option>100</option><option>200</option><option>500</option><option>1000</option><option>2000</option><option>5000</option></select></label>
+                  <label id="seq-gc-mode-label">Skew<select id="seq-gc-mode"><option value="window">Per window</option><option value="cumulative">Cumulative</option></select></label>
+                  <label>Track size<select id="seq-gc-size"><option value="compact">Compact</option><option value="large">Large</option></select></label>
+                </div>
+              </section>
+              <section class="show-section" id="seq-data-controls" aria-label="Data tracks" hidden>
+                <div class="show-heading" title="Values from bedGraph or WIG files: drop one on the sequence in the list">Data tracks</div>
+                <div id="seq-data-list"></div>
+              </section>
+            </div>
+          </span>
+        </span>
+      </div>
+      <div id="graph-controls" class="groups" hidden>
+        <span class="group" id="graph-mode-group"><span class="group-label">Select</span>
+          <div class="segmented" id="graph-mode" title="Nodes: pick nodes to export or BLAST. Path: build a route through the graph, a node as often as it is used">
+            <button type="button" data-gmode="nodes" class="active">Nodes</button>
+            <button type="button" data-gmode="path">Path</button>
+          </div>
+          <label id="graph-gaps-label" class="toggle" hidden title="Let the path jump to a node that isn't joined to the last one (marked red)"><input type="checkbox" id="graph-gaps"> Allow gaps</label>
+        </span>
+        <span class="group" id="graph-select-group"><span class="group-label">Selected</span>
+          <span id="graph-selected" class="muted">nothing</span>
+          <button id="graph-export" disabled title="The selected nodes as a new sequence in the library: one each (a list), or joined into one">Save as sequence…</button>
+        </span>
+        <span class="group" id="graph-find-group"><span class="group-label">Find</span>
+          <input autocomplete="off" id="graph-find" type="search" placeholder="Node name" title="Nodes whose names contain this; Enter for the next">
+          <span id="graph-found" class="muted"></span>
+        </span>
+        <span class="group" id="graph-view-group"><span class="group-label">View</span>
+          <span class="dropdown">
+            <button id="graph-show" class="secondary" aria-expanded="false">Show ▾</button>
+            <div id="graph-show-panel" class="menu" hidden>
+              <div class="menu-heading">Drawing</div>
+              <label class="toggle"><input type="checkbox" id="graph-to-scale"> Lengths to scale</label>
+              <label class="toggle"><input type="checkbox" id="graph-depth-colours" checked> Colour by depth</label>
+              <label class="toggle" title="Dashed links: backward or opposite orientation. Tapered ends point along each node’s + strand."><input type="checkbox" id="graph-links" checked> Links</label>
+              <label>Labels <select id="graph-labels"><option value="auto">Automatic</option><option value="selected">Selected only</option><option value="hidden">Hidden</option></select></label>
+              <div class="menu-heading">Groups</div>
+              <label>Order by <select id="graph-order" title="Which group comes first; Group 1 is the first with more than one node"><option value="track">Longest track</option><option value="total">Total bases</option><option value="nodes">Number of nodes</option></select></label>
+              <label class="toggle" title="The circular groups together at the top, side by side with their centres level, the rest under them"><input type="checkbox" id="graph-compact"> Rings in a row (compact)</label>
+              <label>Hide groups under <input id="graph-min-length" type="number" min="0" step="500" class="short"> bp</label>
+              <label>Hide depth below <input id="graph-min-depth" type="number" min="0" step="1" class="short"></label>
+              <label class="toggle" id="graph-only-hits-label" hidden><input type="checkbox" id="graph-only-hits"> Only groups matching the reference</label>
+              <div class="field-row">
+                <button id="graph-reset" class="secondary">Reset display</button>
+              </div>
+            </div>
+          </span>
+        </span>
+        <span class="group" id="graph-reference-group"><span class="group-label">Reference</span>
+          <button id="graph-compare" class="secondary" title="Align a related genome to the graph's nodes: it shows above the tracks, with bands to where it matches">Compare…</button>
+          <span id="graph-reference" class="muted"></span>
+          <button id="graph-reference-clear" class="secondary" hidden title="Take the comparison off this graph (the reference sequence stays in the library)">×</button>
+        </span>
+      </div>
+      <div id="graph-path" hidden></div>
+      <div id="figure-controls" class="groups" hidden></div>
+      <div id="tree-controls" class="groups" hidden>
+        <span class="group"><span class="group-label">Edit</span>
+          <button id="tree-lock" class="secondary icon-button lock" title="Read only: click to edit" aria-label="Enable tree editing"></button>
+          <button id="tree-undo" class="secondary icon-button" data-icon="undo" disabled title="Undo the last change to the tree (Ctrl+Z)" aria-label="Undo"></button>
+          <button id="tree-redo" class="secondary icon-button" data-icon="redo" disabled title="Redo (Ctrl+Y)" aria-label="Redo"></button>
+          <button id="tree-curate" class="secondary" title="Changes to the tree: reroot on the selected clade, remove the selected tips">Curate ▾</button>
+        </span>
+        <span class="group"><span class="group-label">Find</span>
+          <input autocomplete="off" id="tree-search" type="search" placeholder="Tip name" title="Tips whose names contain this; Enter for the next">
+          <button id="tree-prev" class="secondary icon-button" data-icon="prev" disabled title="Previous match" aria-label="Previous match"></button>
+          <button id="tree-next" class="secondary icon-button" data-icon="next" disabled title="Next match" aria-label="Next match"></button>
+          <span id="tree-found" class="muted"></span>
+        </span>
+        <span class="group"><span class="group-label">View</span>
+          <span class="dropdown">
+            <button id="tree-show" class="secondary" title="What the tree shows">Show ▾</button>
+            <div id="tree-show-panel" class="menu" hidden>
+              <label class="toggle" title="All tip names in one column, with dotted lines to them"><input type="checkbox" id="tree-align"> Align tips</label>
+              <label class="toggle" title="Branch support at the nodes (e.g. IQ-TREE ultrafast bootstrap)"><input type="checkbox" id="tree-support"> Support</label>
+              <label class="toggle" title="Each branch's length, under it"><input type="checkbox" id="tree-lengths"> Branch lengths</label>
+              <label class="toggle" title="Smaller clades first, the largest at the bottom"><input type="checkbox" id="tree-ladderize"> Ladderize</label>
+            </div>
+          </span>
+        </span>
+      </div>
+    </div>
+    <div id="workarea">
+    <div id="views">
+      <div id="placeholder"><p>Select an item in the list to open it, or import files (<b>Import…</b>, or drag them onto this window).<br>Ctrl+click or Shift+click selects several, for the tools above.</p></div>
+      <div id="seqview" class="inactive"></div>
+      <div id="treeview" class="inactive"></div>
+      <div id="graphview" class="inactive"></div>
+      <div id="figureview" class="inactive" tabindex="-1"></div>
+      <div id="readsview" class="inactive"></div>
+      <div id="tableview" class="inactive">
+        <div class="table-bar">
+          <span id="table-title"></span>
+          <button id="table-action" class="secondary" hidden></button>
+          <button id="table-action2" class="secondary" hidden></button>
+          <button id="table-copy" class="secondary" title="The table, tab-separated, to paste into Excel">Copy</button>
+          <button id="table-csv" class="secondary" title="The table as a CSV file">Export CSV…</button>
+          <input autocomplete="off" id="table-filter" type="search" placeholder="Filter">
+        </div>
+        <div id="table-body"></div>
+      </div>
+    </div>
+    <aside id="side-panel" hidden>
+      <div id="side-edge" title="Drag to resize · double-click: the usual width"></div>
+      <div class="side-head">
+        <span id="side-title"></span>
+        <button type="button" id="side-max" class="secondary icon-button" title="Fill the work area / back"></button>
+        <button type="button" id="side-close" class="secondary icon-button" data-icon="close" title="Collapse the panel" aria-label="Collapse the panel"></button>
+      </div>
+        <div id="metadataview" class="side-pane" hidden>
+          <p id="metadata-empty" class="muted" hidden>Select one item to see its metadata.</p>
+          <div class="metadata-content">
+            <h2 id="metadata-title"></h2>
+            <section id="metadata-mapping" hidden><h3>Mapping</h3><div id="mapping-summary"></div>
+              <button type="button" id="mapping-save-consensus" class="secondary" title="The mapping's consensus as a new sequence in the library">Save consensus as a sequence</button></section>
+            <section><h3>Details</h3><div id="metadata-details"></div>
+              <form autocomplete="off" id="metadata-form" hidden>
+                <label>Description<input autocomplete="off" name="description" type="text"></label>
+                <label>Organism (species)<input autocomplete="off" name="organism" type="text"></label>
+                <label>Accession<input autocomplete="off" name="accession" type="text"></label>
+                <label>Strain<input autocomplete="off" name="strain" type="text"></label>
+                <label>Isolate<input autocomplete="off" name="isolate" type="text"></label>
+                <label>Country or location<input autocomplete="off" name="country" type="text"></label>
+                <label>Collection date<input autocomplete="off" name="collection_date" type="text"></label>
+                <label>Host<input autocomplete="off" name="host" type="text"></label>
+                <label>Organelle<input autocomplete="off" name="organelle" type="text"></label>
+                <p class="muted">Changes are written to the sequence record. Use Rename to change its name.</p>
+                <p class="error" hidden></p>
+              </form>
+              <div id="metadata-record"></div>
+            </section>
+            <section><h3>Saved versions</h3><p class="muted">Earlier saved states of this item.</p><button type="button" id="metadata-history" class="secondary">View saved versions…</button> <button type="button" id="metadata-figure-history" class="secondary" hidden>View figure versions…</button></section>
+            <section><h3>Provenance</h3><div id="metadata-provenance"></div><button type="button" id="metadata-log" class="secondary" hidden>Open job log</button></section>
+          </div>
+        </div>
+      <div id="checksview" class="side-pane" hidden>
+        <div class="at-bar"><span id="checks-summary" class="muted"></span><button type="button" id="checks-run" class="secondary" hidden>Check now</button></div>
+        <div id="checks-list"></div>
+        <div class="at-bar at-foot"><span class="muted">Needs the sequences saved</span>
+          <button type="button" id="checks-validate" class="secondary" title="Runs NCBI's table2asn on the saved sequences; its report is the job's log">Validate with NCBI…</button>
+          <button type="button" id="checks-export" class="secondary" title="A FASTA (.fsa) and a feature table (.tbl) with the same name, for NCBI's table2asn">Export for GenBank…</button></div>
+      </div>
+      <div id="annotationview" class="side-pane" hidden>
+        <div class="at-bar">
+          <input autocomplete="off" id="at-filter" type="search" placeholder="Filter" title="Rows whose name, type, product, gene, note or location contain this">
+          <label class="toggle" title="Only the features the submission checks found a problem with"><input type="checkbox" id="at-problems"> With problems</label>
+          <select id="at-type" title="Only this type"><option value="">All types</option></select>
+          <span class="dropdown">
+            <button type="button" id="at-columns" class="secondary" aria-expanded="false">Columns ▾</button>
+            <div id="at-columns-panel" class="menu" hidden></div>
+          </span>
+        </div>
+        <div id="at-scroller">
+          <div id="at-head"></div>
+          <div id="at-spacer"><div id="at-rows"></div></div>
+        </div>
+        <p id="at-empty" class="muted" hidden></p>
+        <div class="at-bar at-foot">
+          <span id="at-status" class="muted"></span>
+          <button type="button" id="at-add" class="secondary" disabled title="A new feature on the bases selected in the viewer (unlock 🔒 first)">+ Feature</button>
+          <span id="at-actions" hidden>
+            <button type="button" id="at-set" class="secondary" title="Set a field on the selected rows">Set…</button>
+            <button type="button" id="at-delete" class="secondary danger" title="Delete the selected features (Ctrl+Z undoes it)">Delete</button>
+          </span>
+          <button type="button" id="at-copy" class="secondary" title="The table as shown, tab-separated, to paste into Excel">Copy</button>
+          <button type="button" id="at-csv" class="secondary" title="The table as shown, as a CSV file">Export CSV…</button>
+        </div>
+      </div>
+      <!-- Identity: the alignment's pairwise identity (matrix.js); a selection limits it -->
+      <div id="matrixview" class="side-pane matrix-pane" hidden>
+        <div class="at-bar">
+          <div class="segmented" title="What the cells show">
+            <button data-matrixshows="identity">% identity</button>
+            <button data-matrixshows="differences">Differences</button>
+          </div>
+          <span id="matrix-title" class="muted" title="Hover a cell for the counts. Gaps at the ends of a sequence don't count; a selection in the alignment limits the matrix to it.">Identity matrix</span>
+        </div>
+        <div id="matrix-body"></div>
+        <div class="at-bar at-foot"><span class="muted">A selection in the alignment limits it</span>
+          <button id="matrix-copy" class="secondary" title="Tab-separated, to paste into Excel">Copy</button>
+          <button id="matrix-export" class="secondary" title="Save as a CSV file">Export CSV…</button></div>
+      </div>
+      <!-- Variants as a matrix (variant-matrix.js): the Variants tab's other view -->
+      <div id="variantmatrixview" class="side-pane matrix-pane" hidden>
+        <div class="at-bar">
+          <div class="segmented" title="The variant sites as a list or as a sample × site matrix">
+            <button data-variantmode="list">List</button><button data-variantmode="matrix">Matrix</button>
+          </div>
+          <input autocomplete="off" id="variant-matrix-filter" type="search" placeholder="Position or allele">
+          <input autocomplete="off" id="variant-matrix-sample" type="search" placeholder="Samples">
+          <select id="variant-matrix-type" title="Type"><option value="all">All types</option><option>SNP</option><option>Indel</option><option>Repeat indel</option><option>MNV</option></select>
+        </div>
+        <div class="at-bar"><span id="variant-matrix-title" class="muted">Sample × variant matrix</span></div>
+        <div id="variant-matrix-body"></div>
+        <div class="at-bar at-foot">
+          <button id="variant-matrix-prev-sites" class="secondary">◀</button><span id="variant-matrix-sites-page"></span><button id="variant-matrix-next-sites" class="secondary">▶</button>
+          <button id="variant-matrix-prev-samples" class="secondary">◀</button><span id="variant-matrix-samples-page"></span><button id="variant-matrix-next-samples" class="secondary">▶</button>
+          <span class="grow"></span>
+          <button id="variant-matrix-copy" class="secondary">Copy</button>
+          <button id="variant-matrix-csv" class="secondary">Export CSV…</button>
+        </div>
+      </div>
+      <!-- Properties: a protein's weight, pI, composition and hydrophobicity (protein-properties.js) -->
+      <div id="propertiesview" class="side-pane" hidden>
+        <div class="at-bar"><span id="props-summary" class="muted"></span>
+          <label class="muted" title="Kyte-Doolittle window, in residues">Window <select id="props-window"><option>5</option><option>7</option><option selected>9</option><option>11</option><option>15</option><option>21</option></select></label></div>
+        <div id="props-body"></div>
+        <div class="at-bar at-foot"><span class="muted">Of the sequence as shown, saved or not</span>
+          <button type="button" id="props-copy" class="secondary" title="The numbers, tab-separated, to paste into a spreadsheet">Copy</button></div>
+      </div>
+      <div id="variantview" class="side-pane" hidden>
+        <div class="at-bar">
+          <div class="segmented" title="The variant sites as a list or as a sample × site matrix">
+            <button data-variantmode="list">List</button><button data-variantmode="matrix">Matrix</button>
+          </div>
+          <input autocomplete="off" id="variant-filter" type="search" placeholder="Position, allele or sample"><span id="variant-summary" class="muted"></span></div>
+        <div class="at-bar variant-filters">
+          <label>Type <select id="variant-type"><option value="all">All</option><option>SNP</option><option>Indel</option><option>Repeat indel</option><option>MNV</option></select></label>
+          <label>Missing <select id="variant-missing"><option value="all">All sites</option><option value="none">No missing calls</option><option value="any">Any missing calls</option></select></label>
+          <label>Min. alternate samples <input id="variant-min-alt" type="number" min="0" step="1" value="0"></label>
+        </div>
+        <div class="variant-heading"><span>Position</span><span>Type</span><span>REF → ALT</span><span>Alt</span><span>Missing</span></div>
+        <div id="variant-list" class="variant-list"></div>
+        <div class="at-bar at-foot"><span id="variant-status" class="muted"></span><button type="button" id="variant-more" class="secondary" hidden>Show more</button><button type="button" id="variant-export" class="secondary">Export filtered VCF…</button></div>
+      </div>
+      <!-- Dot plot: two of the sequences shown, words in common (app-dotplot.js, dotplot.js) -->
+      <div id="dotplotview" class="side-pane" hidden>
+        <div class="at-bar dp-axes">
+          <label title="Across the top">A <select id="dp-a"></select></label>
+          <label title="Down the side">B <select id="dp-b"></select></label>
+          <label class="muted" title="Bases each match needs in common; Auto: longer for longer sequences">Word <select id="dp-word"><option value="0">Auto</option><option>8</option><option>10</option><option>12</option><option>14</option><option>16</option></select></label>
+        </div>
+        <div id="dp-body"><canvas id="dp-plot"></canvas></div>
+        <div class="at-bar at-foot"><span id="dp-status" class="muted"></span>
+          <button type="button" id="dp-figure" class="secondary" title="A figure item of this dot plot (SVG, PDF, PNG, TIFF)">New figure</button></div>
+      </div>
+    </aside>
+    <nav id="side-tabs" hidden aria-label="Side panel">
+      <button type="button" data-sidetab="annotations" title="The features of the sequence, as a table">Annotations</button>
+      <button type="button" data-sidetab="identity" title="Pairwise identity of the alignment's sequences">Identity</button>
+      <button type="button" data-sidetab="dotplot" title="Words two sequences share: repeats, inversions, rearrangements">Dot plot</button>
+      <button type="button" data-sidetab="properties" title="Weight, pI, charge, composition and hydrophobicity of this protein">Properties</button>
+      <button type="button" data-sidetab="variants" title="SNP calls attached to this alignment, as a list or a matrix">Variants</button>
+      <button type="button" data-sidetab="checks" title="Problems that GenBank would reject or question">Checks</button>
+      <button type="button" data-sidetab="metadata" title="Description, organism, accession, saved versions, provenance">Metadata</button>
+    </nav>
+    </div>
+  </main>
+
+  <dialog id="picker-dialog" class="tool-dialog">
+    <form autocomplete="off" method="dialog">
+      <h3 id="picker-title">Choose</h3>
+      <div class="picker-bar">
+        <input id="picker-filter" type="search" placeholder="Filter: name, organism, description, accession" autocomplete="off">
+        <label class="toggle"><input type="checkbox" id="picker-all-folders"> All folders</label>
+        <label class="toggle"><input type="checkbox" id="picker-unusable"> Show unusable</label>
+      </div>
+      <ul id="picker-tree"></ul>
+      <p class="muted" id="picker-foot"></p>
+      <div class="actions">
+        <button value="cancel" class="secondary" formnovalidate>Cancel</button>
+        <button value="ok">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="at-set-dialog" class="tool-dialog">
+    <form autocomplete="off" method="dialog">
+      <h3>Set a field on the selected features</h3>
+      <p class="muted" id="at-set-what"></p>
+      <label>Field
+        <select name="field">
+          <option value="type">Type</option>
+          <option value="name">Name</option>
+          <option value="strand">Strand</option>
+          <option value="product">Product (/product)</option>
+          <option value="gene">Gene (/gene)</option>
+          <option value="note">Note (/note)</option>
+          <option value="transl_table">Genetic code (/transl_table)</option>
+          <option value="other">Another qualifier…</option>
+        </select>
+      </label>
+      <label id="at-set-key-row" hidden>Qualifier
+        <input name="key" placeholder="e.g. codon_start" autocomplete="off">
+      </label>
+      <label>Value
+        <input name="value" autocomplete="off" list="at-types">
+      </label>
+      <p class="muted">Leave the value empty to remove a qualifier.</p>
+      <datalist id="at-types"></datalist>
+      <p class="error" hidden></p>
+      <div class="actions">
+        <button value="cancel" class="secondary" formnovalidate>Cancel</button>
+        <button value="run">Set</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="history-dialog" class="tool-dialog wide">
+    <h3>Saved versions</h3><p class="muted" id="history-note"></p>
+    <div id="history-versions"></div>
+    <form autocomplete="off" method="dialog" class="actions"><button>Close</button></form>
+  </dialog>
+
+  <!-- ── Tool dialogs ────────────────────────────────────────────────── -->
+  <dialog id="group-dialog" class="tool-dialog">
+    <form autocomplete="off" method="dialog">
+      <h3>Several files</h3>
+      <p id="group-question"></p>
+      <label><span id="group-name-label">Name</span>
+        <input autocomplete="off" name="name" type="text">
+      </label>
+      <div class="actions">
+        <button value="separate" class="secondary">Keep them as they are</button>
+        <button value="folder" class="secondary" id="group-folder">New folder</button>
+        <button value="list" id="group-list">One list</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="meta-dialog" class="tool-dialog">
+    <form autocomplete="off" method="dialog">
+      <h3>Import metadata from a table</h3>
+      <p class="muted" id="meta-what"></p>
+      <div class="field-row">
+        <button type="button" id="meta-choose" class="secondary">Choose a file…</button>
+        <span id="meta-file" class="muted"></span>
+        <input type="file" id="meta-input" accept=".csv,.tsv,.txt,.xlsx,.xlsm" hidden>
+      </div>
+      <div id="meta-body" hidden>
+        <label>The sequences' names are in the column
+          <select id="meta-name"></select>
+        </label>
+        <p class="muted">Matched to each sequence's name or accession, ignoring case and spaces.
+          Then, for each field, the column it comes from:</p>
+        <div id="meta-map"></div>
+        <label class="toggle"><input type="checkbox" id="meta-clear"> An empty cell empties the field (otherwise it leaves it as it is)</label>
+        <div id="meta-preview" class="meta-preview"></div>
+      </div>
+      <p class="error" hidden></p>
+      <div class="actions">
+        <button value="cancel" class="secondary" formnovalidate>Cancel</button>
+        <button value="run" id="meta-run" disabled>Import</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="submission-dialog" class="tool-dialog">
+    <form autocomplete="off" method="dialog">
+      <h3 id="submission-title">Export for GenBank</h3>
+      <label>Submitter
+        <select name="submitter" title="From Settings > Submitters"></select>
+      </label>
+      <p class="muted" id="submission-none" hidden>No submitters yet: add one in Settings &gt; Submitters to
+        write the authors, contact and reference into the template (.sbt).</p>
+      <div id="submission-details">
+        <label>Authors of this submission, one per line
+          <textarea name="authors" rows="4" spellcheck="false"></textarea>
+        </label>
+        <label>Title of the paper
+          <input name="title" type="text" autocomplete="off">
+        </label>
+        <label>Release on
+          <input name="hold" type="date" title="Empty: when NCBI has processed it">
+        </label>
+      </div>
+      <label>Locus tag prefix
+        <input name="prefix" type="text" autocomplete="off" placeholder="3 to 12 letters and digits, from your BioProject; empty = none">
+      </label>
+      <p class="error" hidden></p>
+      <div class="actions">
+        <button value="cancel" class="secondary" formnovalidate>Cancel</button>
+        <button value="run" id="submission-run">Export</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="settings-dialog" class="tool-dialog">
+    <form autocomplete="off" method="dialog">
+      <h3>Settings</h3>
+      <div class="tabs" id="settings-tabs">
+        <button type="button" data-tab="general">General</button>
+        <button type="button" data-tab="tools">Tools</button>
+        <button type="button" data-tab="ncbi">NCBI</button>
+        <button type="button" data-tab="blastdbs">BLAST databases</button>
+        <button type="button" data-tab="submitters">Submitters</button>
+        <button type="button" data-tab="space">Storage</button>
+      </div>
+      <div class="tab-panel" data-tab="general">
+      <fieldset>
+        <legend>Jobs</legend>
+        <label>Cores for computing jobs
+          <input name="cores" type="number" min="0" step="1" title="0: all but one, so Cladia's window stays quick">
+        </label>
+        <p class="muted" id="cores-note"></p>
+      </fieldset>
+      <fieldset>
+        <legend>Display</legend>
+        <label>Text size
+          <select name="text_size" title="Everything in Cladia's windows, text and buttons, larger or smaller, as a browser's zoom">
+            <option value="90">90 %</option>
+            <option value="100">100 % (normal)</option>
+            <option value="110">110 %</option>
+            <option value="125">125 %</option>
+            <option value="150">150 %</option>
+            <option value="175">175 %</option>
+          </select>
+        </label>
+        <p class="muted" id="text-size-note">Applied to every Cladia window when you save.</p>
+      </fieldset>
+      <fieldset>
+        <legend>Version and help</legend>
+        <p class="muted" id="version-note"></p>
+        <button type="button" class="secondary" id="update-reveal" hidden>Show the new installer</button>
+        <button type="button" class="secondary" id="help-guide">User guide</button>
+        <button type="button" class="secondary" id="help-logs">Show the log files</button>
+        <p class="muted">Reporting a problem: say what you did and which version this is, and send
+          <code>cladia.log</code> from the log files folder. For a job that failed, also its log (Jobs › Archive…).</p>
+      </fieldset>
+      </div>
+      <div class="tab-panel" data-tab="tools">
+        <p class="muted">Built-in and optional tools. Optional tools are downloaded when you install them; once installed they appear in their tool dialog. Open a tool for details, disk use and actions.</p>
+        <div id="tool-engines-list" class="tool-grid"></div>
+        <p class="error" id="tool-engines-error" hidden></p>
+      </div>
+      <div class="tab-panel" data-tab="ncbi">
+      <fieldset>
+        <legend>NCBI</legend>
+        <label>E-mail
+          <input autocomplete="off" name="ncbi_email" type="email" placeholder="you@example.org"
+                 title="Sent with requests to NCBI, as NCBI asks programs to, so they can write instead of blocking">
+        </label>
+        <label>API key
+          <input name="ncbi_api_key" type="text" autocomplete="off" spellcheck="false"
+                 title="From your NCBI account (Account settings > API Key Management)">
+        </label>
+        <p class="muted">The key makes GenBank downloads and searches faster (10 requests a second instead of 3).
+          It doesn't change BLAST, whose speed is NCBI's queue.</p>
+      </fieldset>
+      </div>
+      <div class="tab-panel" data-tab="blastdbs">
+        <p class="muted">Databases for BLAST on this PC. Cladia's own are kept in
+          <span id="blastdb-folder"></span>.</p>
+        <div id="blastdb-list"></div>
+        <fieldset>
+          <legend>Add one you have</legend>
+          <p class="muted">A BLAST database (pick any of its files: .nal, .nsq, .pal, .psq…) is used where it
+            is, not copied. A FASTA file is made into a database in Cladia's folder.</p>
+          <div class="field-row">
+            <input autocomplete="off" name="blastdb_path" type="text" placeholder="Path of the file" spellcheck="false">
+            <button type="button" id="blastdb-browse" class="secondary">Browse…</button>
+          </div>
+          <div class="field-row">
+            <input autocomplete="off" name="blastdb_add_name" type="text" placeholder="Name (from the file if empty)">
+            <button type="button" id="blastdb-add">Add</button>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Download from GenBank</legend>
+          <p class="muted">Every nucleotide record a GenBank search finds, made into a database.</p>
+          <input autocomplete="off" name="blastdb_query" type="search" class="wide-input" spellcheck="false"
+                 placeholder="e.g. Rhodophyta[organism] AND mitochondrion[filter]"
+                 title="NCBI's own search: plain words, or fields like [organism], [gene], [filter], AND, OR, NOT">
+          <div class="field-row">
+            <input autocomplete="off" name="blastdb_name" type="text" placeholder="Name (from the search if empty)">
+            <button type="button" id="blastdb-estimate" class="secondary">Estimate size and time</button>
+            <button type="button" id="blastdb-download">Download</button>
+          </div>
+          <p class="muted" id="blastdb-estimate-text"></p>
+        </fieldset>
+      </div>
+      <div class="tab-panel" data-tab="submitters">
+        <p class="muted">Who submits to GenBank: the authors, contact and reference that go into the submission
+          template (.sbt). Keep one per collaboration; you choose it when you export for GenBank or validate.</p>
+        <div class="field-row">
+          <select id="sub-select" title="The submitter to edit"></select>
+          <button type="button" id="sub-new" class="secondary">New</button>
+          <button type="button" id="sub-copy" class="secondary">Duplicate</button>
+          <button type="button" id="sub-delete" class="secondary danger">Delete</button>
+        </div>
+        <div id="sub-form">
+          <fieldset>
+            <legend>Submitter</legend>
+            <label>Name of this submitter
+              <input data-f="name" type="text" placeholder="e.g. Fucus project" autocomplete="off">
+            </label>
+            <label>Authors, one per line
+              <textarea data-f="authors" rows="4" spellcheck="false"
+                        placeholder="Doe, Jane&#10;Roe, Richard B."></textarea>
+            </label>
+            <p class="muted">As &ldquo;Last, First&rdquo; (or &ldquo;First Last&rdquo;), in the order of the paper.</p>
+            <label>Contact (empty: the first author)
+              <input data-f="contact" type="text" placeholder="Last, First" autocomplete="off">
+            </label>
+            <div class="field-row">
+              <input data-f="email" type="email" placeholder="E-mail" autocomplete="off">
+              <input data-f="phone" type="text" placeholder="Phone" autocomplete="off">
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Affiliation</legend>
+            <input data-f="institution" type="text" class="wide-input" placeholder="Institution" autocomplete="off">
+            <input data-f="department" type="text" class="wide-input" placeholder="Department" autocomplete="off">
+            <input data-f="street" type="text" class="wide-input" placeholder="Street" autocomplete="off">
+            <div class="field-row">
+              <input data-f="city" type="text" placeholder="City" autocomplete="off">
+              <input data-f="state" type="text" placeholder="State / province" autocomplete="off">
+              <input data-f="postal_code" type="text" placeholder="Postal code" autocomplete="off">
+              <input data-f="country" type="text" placeholder="Country" autocomplete="off">
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Reference</legend>
+            <label>Title of the paper
+              <input data-f="title" type="text" autocomplete="off" placeholder="Left empty it is not written">
+            </label>
+            <div class="field-row">
+              <label>Status <input data-f="citation" type="text" autocomplete="off" title="unpublished, in press..."></label>
+              <label>Release on <input data-f="hold" type="date" title="Empty: when NCBI has processed it"></label>
+            </div>
+          </fieldset>
+        </div>
+        <p class="muted" id="sub-none">No submitters yet. Add one, or drop a .sbt file you already have into Cladia.</p>
+        <div class="field-row">
+          <button type="button" id="sub-import" class="secondary">Import .sbt…</button>
+          <button type="button" id="sub-export" class="secondary">Export .sbt…</button>
+          <input type="file" id="sbt-input" accept=".sbt,.txt" hidden>
+        </div>
+      </div>
+      <div class="tab-panel" data-tab="space">
+      <fieldset>
+        <legend>Project ZIP</legend>
+        <p class="muted">Share the entire saved library, folders and attached results. External read files,
+          tools, databases, settings and job logs are not included.</p>
+        <label class="check"><input type="checkbox" id="project-history"> Include saved versions</label>
+        <label class="check"><input type="checkbox" id="project-trash"> Include Trash</label>
+          <label class="check" title="Reads items keep their reports either way; their FASTQ files are large"><input type="checkbox" id="project-reads"> Include read files (FASTQ)</label>
+        <p><button type="button" id="project-export" class="secondary">Export project ZIP…</button>
+          <button type="button" id="project-choose" class="secondary">Import project ZIP…</button></p>
+        <input type="file" id="project-file" accept=".zip" hidden>
+        <progress id="project-progress" aria-label="Transferring project" hidden></progress>
+        <button type="button" id="project-cancel" class="secondary" hidden>Cancel transfer</button>
+        <div id="project-status" aria-live="polite"></div>
+        <div id="project-recovery" aria-live="polite"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Space</legend>
+        <div id="space-info" class="muted">Measuring…</div>
+        <p><button type="button" id="check-library" class="secondary">Check library</button></p>
+        <div id="library-check-result" aria-live="polite"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Trash</legend>
+        <p class="muted">What you delete in the list waits here until you delete it for good. Restored
+          items go back to the folder they were in; sequences deleted from a list come back beside it.</p>
+        <div id="trash-list"></div>
+        <div class="trash-actions">
+          <button type="button" class="secondary" id="trash-restore" disabled>Restore</button>
+          <button type="button" class="secondary danger" id="trash-delete" disabled>Delete for good</button>
+          <button type="button" class="secondary danger" id="trash-empty">Empty the trash</button>
+        </div>
+      </fieldset>
+      </div>
+      <p class="error" hidden></p>
+      <div class="actions">
+        <button value="cancel" class="secondary" formnovalidate>Cancel</button>
+        <button value="save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="tool-engine-dialog" class="tool-dialog">
+    <form autocomplete="off" method="dialog">
+      <h3 id="tool-engine-title"></h3>
+      <p class="muted" id="tool-engine-description"></p>
+      <div id="tool-engine-packages"></div>
+      <div id="tool-engine-settings"></div>
+      <div id="tool-engine-actions" class="field-row"></div>
+      <p class="error" id="tool-engine-error" hidden></p>
+      <div class="actions">
+        <button value="cancel" class="secondary" formnovalidate>Close</button>
+        <button type="button" id="tool-engine-save-settings" class="secondary" hidden>Save settings</button>
+        <button type="button" id="tool-engine-confirm">Install</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="folder-dialog" class="tool-dialog">
+    <form autocomplete="off" method="dialog">
+      <h3 id="folder-dialog-title">New folder</h3>
+      <label>Name
+        <input autocomplete="off" name="name" type="text" required>
+      </label>
+      <p class="error" hidden></p>
+      <div class="actions">
+        <button value="cancel" class="secondary" formnovalidate>Cancel</button>
+        <button value="ok">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- one text answer (askText in app.js): instead of the browser's prompt() -->
+  <dialog id="ask-dialog" class="tool-dialog">
+    <form autocomplete="off" method="dialog">
+      <h3 id="ask-title"></h3>
+      <p class="muted" id="ask-about"></p>
+      <label><span id="ask-label"></span>
+        <input autocomplete="off" name="answer" type="text" required>
+      </label>
+      <p class="error" hidden></p>
+      <div class="actions">
+        <button value="cancel" class="secondary" formnovalidate>Cancel</button>
+        <button value="ok" id="ask-ok">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="graph-export-dialog" class="tool-dialog">
+    <form autocomplete="off" method="dialog">
+      <h3>Export the selected nodes as a sequence</h3>
+      <p class="muted" id="graph-export-what"></p>
+      <label>Name
+        <input autocomplete="off" name="name" required>
+      </label>
+      <fieldset id="graph-export-how">
+        <legend>As</legend>
+        <div class="blast-destination-options">
+          <label class="blast-destination-option">
+            <input type="radio" name="how" value="list" checked>
+            <span><b>One sequence per node</b><small>A list in the library, each node as it is in the file</small></span>
+          </label>
+          <label class="blast-destination-option">
+            <input type="radio" name="how" value="join">
+            <span><b>Joined into one sequence</b><small>In the order drawn, overlaps once, the nodes as features; they must follow each other along a line</small></span>
+          </label>
+        </div>
+      </fieldset>
+      <p class="error" hidden></p>
+      <div class="actions">
+        <button value="cancel" class="secondary" formnovalidate>Cancel</button>
+        <button value="run">Export</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="graph-blast-dialog" class="tool-dialog">
+    <form autocomplete="off" method="dialog">
+      <h3>Compare with a reference</h3>
+      <p class="muted">A related genome is aligned to the graph's nodes (BLAST) and shown above the tracks,
+        with a band from each stretch of it to where it matches. Click a band to line its track up under it.
+        A new comparison replaces the last.</p>
+      <label>Reference
+        <select name="query" required></select>
+      </label>
+      <label>Search
+        <select name="task">
+          <option value="blastn">Sensitive (blastn): related species</option>
+          <option value="megablast">Fast (megablast): the same species</option>
+        </select>
+      </label>
+      <div class="actions">
+        <button value="cancel" class="secondary" formnovalidate>Cancel</button>
+        <button value="run">Compare</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="code-dialog" class="tool-dialog">
+    <form autocomplete="off" method="dialog">
+      <h3>Genetic code of the sequence</h3>
+      <p class="muted">Saved in the sequence as <i>/transl_table</i> on each of its <span id="code-cds"></span>
+        CDSs, as GenBank stores it; their stored translations are updated when you save.
+        (The Code menu in the bar only changes what is shown.)</p>
+      <label>Genetic code
+        <select name="code"></select>
+      </label>
+      <div class="actions">
+        <button value="cancel" class="secondary" formnovalidate>Cancel</button>
+        <button value="save">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+<dialog id="feature-dialog" class="tool-dialog">
+    <form autocomplete="off" method="dialog">
+      <h3 id="feature-title">Feature</h3>
+      <label>Name
+        <input autocomplete="off" name="name" type="text" required>
+      </label>
+      <label>Type
+        <input autocomplete="off" name="type" type="text" list="feature-types" required>
+        <datalist id="feature-types">
+          <option value="gene"><option value="CDS"><option value="rRNA"><option value="tRNA">
+          <option value="mRNA"><option value="exon"><option value="intron"><option value="misc_feature">
+          <option value="repeat_region"><option value="misc_RNA"><option value="ncRNA"><option value="rep_origin">
+        </datalist>
+      </label>
+      <label>Location
+        <input autocomplete="off" name="location" type="text" required title="As in GenBank, 1-based: 100..200, complement(100..200), join(1..50,80..120)">
+      </label>
+      <label>Qualifiers
+        <textarea name="qualifiers" rows="6" placeholder="one per line: key=value, e.g. product=cytochrome b"></textarea>
+      </label>
+      <p class="error" hidden></p>
+      <div class="actions">
+        <button value="delete" class="secondary danger" formnovalidate id="feature-delete">Delete feature</button>
+        <span class="grow"></span>
+        <button value="cancel" class="secondary" formnovalidate id="feature-cancel">Cancel</button>
+        <button value="save" id="feature-ok">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+
+  <dialog id="export-dialog" class="tool-dialog">
+    <form autocomplete="off" method="dialog">
+      <h3>Export</h3>
+      <p class="muted" id="export-what"></p>
+      <label>Format
+        <select name="format">
+          <option value="genbank">GenBank (.gb), with annotations</option>
+          <option value="fasta">FASTA (.fasta), sequences only</option>
+          <option value="gff3">GFF3 (.gff3), annotations only</option>
+          <option value="gff3fasta">GFF3 + FASTA (.gff3), annotations with the sequences in one file</option>
+          <option value="protein">CDS proteins (FASTA), one per CDS</option>
+          <option value="nexus">NEXUS (.nex), an alignment or trees</option>
+          <option value="phylip">PHYLIP (.phy), an alignment</option>
+          <option value="newick">Newick (.nwk), trees</option>
+          <option value="bam">BAM (.bam), a mapping's reads, with its index</option>
+          <option value="gfa">GFA (.gfa), an assembly graph as imported</option>
+            <option value="vcf">VCF (.vcf), variants as imported</option>
+        </select>
+      </label>
+      <p class="error" hidden></p>
+      <div class="actions">
+        <button value="cancel" class="secondary" formnovalidate>Cancel</button>
+        <button value="run">Export…</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="log-dialog">
+    <h3 id="log-title"></h3>
+    <p class="muted" id="log-facts"></p>
+    <pre id="log-text"></pre>
+    <form autocomplete="off" method="dialog"><button>Close</button></form>
+  </dialog>
+
+  <dialog id="archive-dialog" class="tool-dialog wide">
+    <h3>Job archive</h3>
+    <p class="muted">Every job's log is kept here when it ends, from this and earlier sessions. Click one to read it; tick some to delete them.</p>
+    <input autocomplete="off" id="archive-filter" type="search" placeholder="Filter: tool, sequence, status…">
+    <div id="archive-body"></div>
+    <form autocomplete="off" method="dialog" class="actions"><button type="button" id="archive-delete" class="secondary danger" disabled>Delete</button><button>Close</button></form>
+  </dialog>
+
+  <dialog id="project-dialog" class="tool-dialog">
+    <form autocomplete="off" method="dialog">
+      <h2>Import project ZIP</h2>
+      <p id="project-summary"></p>
+      <p class="muted">Items are added in a new folder. Existing items stay as they are.
+        Included Trash items are added to Settings → Storage → Trash.</p>
+      <label>New folder <input autocomplete="off" id="project-name" value="Imported project" required></label>
+      <p class="error" id="project-error" hidden></p>
+      <progress id="project-import-progress" aria-label="Importing project" hidden></progress>
+      <div class="actions"><button value="cancel" class="secondary">Cancel</button>
+        <button type="button" id="project-stop" class="secondary" hidden>Cancel job</button>
+        <button type="button" id="project-import">Import</button></div>
+    </form>
+  </dialog>
+  <div id="list-menu" class="menu" hidden></div>
+  <div id="hover-card" hidden></div>
+  <div id="toast" hidden></div>
+  <div id="drop-overlay" hidden>
+    <div class="drop-main">Drop files here to import them<small>GFF3 annotations: drop them on a sequence in the list to add them to it</small></div>
+  </div>
+
+  <script src="treeview.js"></script>
+  <script src="graphview.js"></script>
+  <script src="seqview.js"></script>
+  <script src="seqview-circular.js"></script>
+  <script src="seqedit.js"></script>
+  <script src="seqview-gc.js"></script>
+  <script src="dotplot.js"></script>
+  <script src="figure-genome.js"></script>
+  <script src="figure-dotplot.js"></script>
+  <script src="figure.js"></script>
+  <script src="resultview.js"></script>
+  <script src="matrix.js"></script>
+  <script src="app.js"></script>
+  <script src="app-folders.js"></script>
+  <script src="app-viewer.js"></script>
+  <script src="app-tools.js"></script>
+  <script src="app-picker.js"></script>
+  <script src="app-tool-registry.js"></script>
+  <script src="app-destinations.js"></script>
+  <script src="variant-table.js"></script>
+  <script src="variant-matrix.js"></script>
+  <script src="protein-properties.js"></script>
+  <script src="app-dotplot.js"></script>
+  <script src="app-reads.js"></script>
+  <script src="app-panel.js"></script>
+  <script src="app-projects.js"></script>
+  <script src="app-start.js"></script>
+</body>
+</html>

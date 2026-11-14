@@ -1,0 +1,183 @@
+nadd =  62
+npair =  62
+nseq =  63
+nlen =  1800
+use multipair, weighti=2.7!
+distout=h
+nadd = 62
+generating a scoring matrix for nucleotide (dist=200) ... done
+dndpre (nuc) Version 7.526
+alg=X, model=DNA200 (2), 2.00 (6.00), -0.10 (-0.30), noshift, amax=0.0
+12 thread(s)
+
+generating a scoring matrix for nucleotide (dist=200) ... done
+All-to-all alignment.
+    0 / 1 (by thread   0)
+
+##### writing hat3
+pairlocalalign (nuc) Version 7.526
+alg=Y, model=DNA200 (2), 2.00 (6.00), -0.10 (-0.30), noshift, amax=0.0
+12 thread(s)
+
+nadd = 62
+ppenalty_ex = -10
+nthread = 12
+blosum 62 / kimura 200
+sueff_global = 0.100000
+norg = 1
+njobc = 2
+Loading 'hat3' ...
+done.
+generating a scoring matrix for nucleotide (dist=200) ... done
+Loading 'hat2n' (aligned sequences - new sequences) ... done.
+Loading 'hat2i' (aligned sequences) ... done.
+
+STEP 0 / 62 (thread 1)
+c
+STEP 1 / 62 (thread 6)
+
+STEP 2 / 62 (thread 2)
+cc
+STEP 3 / 62 (thread 0)
+
+STEP 4 / 62 (thread 5)
+cc
+STEP 5 / 62 (thread 4)
+c
+STEP 6 / 62 (thread 3)
+c
+STEP 7 / 62 (thread 7)
+c
+STEP 8 / 62 (thread 8)
+c
+STEP 9 / 62 (thread 9)
+c
+STEP 10 / 62 (thread 10)
+c
+STEP 11 / 62 (thread 11)
+c
+STEP 12 / 62 (thread 3)
+c
+STEP 13 / 62 (thread 6)
+c
+STEP 14 / 62 (thread 11)
+c
+STEP 15 / 62 (thread 2)
+c
+STEP 16 / 62 (thread 8)
+c
+STEP 17 / 62 (thread 7)
+c
+STEP 18 / 62 (thread 3)
+c
+STEP 19 / 62 (thread 1)
+c
+STEP 20 / 62 (thread 5)
+c
+STEP 21 / 62 (thread 0)
+c
+STEP 22 / 62 (thread 4)
+c
+STEP 23 / 62 (thread 10)
+c
+STEP 24 / 62 (thread 9)
+c
+STEP 25 / 62 (thread 6)
+c
+STEP 26 / 62 (thread 11)
+c
+STEP 27 / 62 (thread 8)
+c
+STEP 28 / 62 (thread 2)
+c
+STEP 29 / 62 (thread 7)
+c
+STEP 30 / 62 (thread 3)
+c
+STEP 31 / 62 (thread 0)
+c
+STEP 32 / 62 (thread 1)
+c
+STEP 33 / 62 (thread 5)
+c
+STEP 34 / 62 (thread 4)
+c
+STEP 35 / 62 (thread 10)
+c
+STEP 36 / 62 (thread 9)
+c
+STEP 37 / 62 (thread 11)
+c
+STEP 38 / 62 (thread 8)
+c
+STEP 39 / 62 (thread 6)
+c
+STEP 40 / 62 (thread 3)
+c
+STEP 41 / 62 (thread 2)
+c
+STEP 42 / 62 (thread 1)
+c
+STEP 43 / 62 (thread 7)
+c
+STEP 44 / 62 (thread 0)
+c
+STEP 45 / 62 (thread 5)
+c
+STEP 46 / 62 (thread 4)
+c
+STEP 47 / 62 (thread 10)
+c
+STEP 48 / 62 (thread 9)
+c
+STEP 49 / 62 (thread 11)
+c
+STEP 50 / 62 (thread 8)
+c
+STEP 51 / 62 (thread 6)
+c
+STEP 52 / 62 (thread 3)
+c
+STEP 53 / 62 (thread 2)
+c
+STEP 54 / 62 (thread 1)
+c
+STEP 55 / 62 (thread 5)
+c
+STEP 56 / 62 (thread 7)
+c
+STEP 57 / 62 (thread 0)
+c
+STEP 58 / 62 (thread 10)
+c
+STEP 59 / 62 (thread 4)
+c
+STEP 60 / 62 (thread 11)
+c
+STEP 61 / 62 (thread 9)
+c
+
+Combining ..
+0 / 62
+
+   done.
+
+
+   done.
+
+addsingle (nuc) Version 7.526
+alg=A, model=DNA200 (2), 1.53 (4.59), -0.00 (-0.00), noshift, amax=0.0
+12 thread(s)
+
+
+Strategy:
+ Multi-INS-fragment (Not tested.)
+ ?
+
+If unsure which option to use, try 'mafft --auto input > output'.
+For more information, see 'mafft --help', 'mafft --man' and the mafft page.
+
+The default gap scoring scheme has been changed in version 7.110 (2013 Oct).
+It tends to insert more gaps into gap-rich regions than previous versions.
+To disable this change, add the --leavegappyregion option.
+

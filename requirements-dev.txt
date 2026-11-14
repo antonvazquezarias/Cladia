@@ -1,0 +1,4 @@
+# For running the checks (python -m pytest tests); not needed to use Cladia.
+-r requirements.txt
+pytest>=8.0
+httpx2      # Starlette's TestClient backend

@@ -1,0 +1,16 @@
+# What Cladia runs on, at the versions it was tested with (setup.bat installs
+# these). To move to newer versions: install them, run the checks, then change
+# the numbers here. Packages for the tests are in requirements-dev.txt.
+biopython==1.88
+numpy==2.5.4         # with Biopython; distance trees and read statistics
+fastapi==0.162.2
+starlette==1.10.0
+pydantic==2.14.3
+uvicorn==0.54.0
+pywebview==6.2.1
+pythonnet==3.2.1     # pywebview's bridge to the Windows window
+svglib==2.4.0        # figures as PDF (SVG drawn with reportlab)
+reportlab==5.1.0
+pillow==13.0.0       # figures as PNG and TIFF
+openpyxl==3.1.5      # metadata tables from Excel (.xlsx)
+markdown==3.11.3     # the user guide shown from Help

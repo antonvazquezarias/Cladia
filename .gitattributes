@@ -1,0 +1,5 @@
+# Line endings: Windows batch files must keep CRLF
+* text=auto
+*.bat text eol=crlf
+*.sh text eol=lf
+*.sh text eol=lf

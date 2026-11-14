@@ -1,0 +1,14 @@
+const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
+const window = {};
+vm.runInNewContext(fs.readFileSync('cladia/static/seqedit.js', 'utf8'), { window });
+const { gcWindows, gcSkew, autoWindow } = window.SeqEdit;
+const w = gcSkew('GGCCGANNCC', 4);
+assert.equal(w[0].gc, 1); assert.equal(w[0].skew, 0);
+assert.equal(w[1].called, 2); assert.equal(w[1].skew, 1);
+assert.equal(w[1].cumulative, .1); assert.equal(w[2].cumulative, -.1);
+assert.equal(gcSkew('NNAA', 2)[0].skew, null);
+assert.equal(gcSkew('NNAA', 2)[1].skew, null);
+assert.equal(gcWindows('acguN', 20)[0].gc, .5);
+assert.equal(gcSkew('', 10).length, 0);
+for (const length of [15000, 150000, 500000]) assert(length / autoWindow(length) >= 300 && length / autoWindow(length) <= 800);
+console.log('GC windows, ambiguity, skew, cumulative normalization and automatic sizes passed');
