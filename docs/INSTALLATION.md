@@ -2,12 +2,13 @@
 
 [Overview](../README.md) · [User guide](USER_GUIDE.md)
 
-Cladia’s supported desktop setup is Windows with WSL 2 for Linux analysis tools.
-The Python application and its library live on Windows.
+Cladia runs on Windows 10 and 11; its analysis tools run in Linux through WSL 2.
+The application and its library live on Windows.
 
 ## Installer
 
-If you have a lab-provided `Cladia-setup-<date>.exe`, run it.
+Download `Cladia-setup-<date>.exe` from the
+[latest release](https://github.com/antonvazquezarias/Cladia/releases/latest) and run it.
 Choose **Default** for Cladia and its standard tools, or **Custom** to select
 optional tools and GetOrganelle databases. Each optional tool shows its approximate
 installed size. Shared Linux files, package caches and databases require extra
@@ -16,7 +17,7 @@ tool progress and live status in the installer. Downloads run without a console
 window. When a stage cannot report a percentage, an animated bar shows activity.
 Detailed setup output is saved in `%LOCALAPPDATA%\Cladia\setup.log`. If a tool
 fails, choose Retry or Ignore to skip it and add it later in **Settings → Tools**.
-The lab distributes installers through its *Ferramentas* folder. The installer
+The installer
 sets up Cladia for your user only (no administrator rights, except for WSL if
 it is missing: Windows asks), downloads Python and
 its packages the first time (a console window shows it, a few minutes), and adds
@@ -25,7 +26,7 @@ installer: your library and saved versions are preserved.
 Close Cladia and let its jobs finish before updating or uninstalling. Setup checks
 for Python processes using Cladia's environment before replacing files; if one is
 still running, close it and retry. Uninstall also refuses to remove a running app.
-Cladia remembers the folder its installer was run from (for the lab, the shared Ferramentas folder);
+Cladia remembers the folder its installer was run from (for example a lab's shared folder);
 when a newer `Cladia-setup-<date>.exe` appears there, it says so when it starts,
 and Settings › General shows the installer in Explorer. Uninstalling removes the program, its
 Python and its Linux, not your library (`%USERPROFILE%\Cladia`).
@@ -34,13 +35,10 @@ The tools (MAFFT, annotation, trees, mapping, BLAST, primers) share one WSL 2
 distribution named **Cladia**, stored in `%LOCALAPPDATA%\Cladia\linux`.
 MFannot keeps an independent Linux root filesystem inside it (from its authors'
 image on Docker Hub), and optional tools
-(Settings → Tools: Clustal Omega, GetOrganelle, Krait, MUSCLE, MACSE, RAxML-NG, MrBayes, tRNAscan-SE, trimAl, ClipKIT) are downloaded from bioconda
+(Settings → Tools: Clustal Omega, GetOrganelle, Krait, MUSCLE, MACSE, RAxML-NG, MrBayes, tRNAscan-SE, ARAGORN, trimAl, ClipKIT) are downloaded from bioconda
 into conda environments of their own when installed, so their dependencies stay
-separate. Installing an optional tool needs an internet connection. Docker Desktop is not required. The first
-tool run prepares the necessary environment; earlier tool installations
-migrate automatically after their jobs and
-terminals are closed. Each replacement is checked before its old registration
-is removed. Your personal WSL distributions and the old shared wslc disk are
+separate. Installing an optional tool needs an internet connection. The first
+tool run prepares the necessary environment. Your own WSL distributions are
 left alone. Uninstalling Cladia removes its managed Linux environments.
 
 ## From source

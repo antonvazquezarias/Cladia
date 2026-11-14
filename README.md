@@ -2,84 +2,62 @@
 
 A desktop workbench for sequences, alignments, genome maps and phylogenetic trees.
 Keep a local sequence library, run analysis tools, inspect results and prepare
-figures in one application.
-
-Cladia was previously called **SeqLab**.
-The supported desktop setup is **Windows**, with **WSL 2** for Linux analysis
-tools. Docker Desktop is not required.
+figures in one application. Cladia runs on Windows 10 and 11.
 
 ## What you can do
 
-- **Organize sequences:** import GenBank, EMBL, FASTA, GFF3 and Sanger traces;
-  manage folders, annotations and metadata in a local library.
+- **Organize sequences:** import GenBank, EMBL, FASTA, GFF3, SnapGene and Sanger
+  traces; manage folders, annotations and metadata in a local library.
 - **Inspect and edit:** linear and circular sequence views, alignment gap editing,
   GC-content and GC-skew tracks, read mappings and assembly graphs.
-- **Run analyses:** alignment with MAFFT, de novo annotation with MFannot, annotation from a reference,
-  trees with IQ-TREE or FastTree, mapping with minimap2 and samtools, local or
-  NCBI BLAST, primer design and in-silico PCR.
+- **Run analyses:** alignment with MAFFT, de novo annotation with MFannot, annotation
+  from a reference, trees with IQ-TREE or FastTree, read mapping with minimap2,
+  local or NCBI BLAST, primer design and in-silico PCR.
 - **Prepare figures:** edit tree, genome-map and genome-comparison figures;
   export SVG, PDF, PNG or TIFF.
-- **Share work:** export a project ZIP with saved library items and attachments,
-  optionally including saved versions and Trash.
+- **Share work:** export a whole project as one ZIP file for a colleague.
 
-Imports are copied into Cladia’s library. Editing works on those copies;
-writing back to an original file is an explicit export action. Saved versions
-help recover edits, but are stored alongside the library and are not a backup.
+## Installing
 
-## Setup on Windows
+Download **Cladia-setup-&lt;date&gt;.exe** from the
+[latest release](https://github.com/antonvazquezarias/Cladia/releases/latest) and run it.
+It installs for your user only, without administrator rights, and adds Cladia to
+the Start menu. Choose **Custom** to add optional tools at the same time.
+Uninstalling keeps your library.
 
-From a copy or clone of this repository:
+The analysis tools run in Linux through WSL 2, which the installer sets up if your
+PC doesn't have it yet. That is the one step Windows asks permission for, and it may
+need a restart. Each tool is downloaded the first time you use it, so the first run
+of a tool takes longer.
 
-1. Run **[setup.bat](setup.bat)** to prepare Python and the application dependencies.
-2. Run **[run.bat](run.bat)** to open Cladia.
-3. Import files, select an item and choose a tool or viewer.
-
-Setup offers to install WSL if it is missing; that step may require administrator
-approval and a restart. The first Linux analysis prepares its tool environment
-and may download several hundred megabytes. Cladia manages one WSL distribution
-with isolated dependency environments where needed.
-
-If you have a lab-provided `Cladia-setup-<date>.exe`, you can use that instead.
-See the **[installation guide](docs/INSTALLATION.md)** for installer updates,
-setup checks, storage locations and migration from SeqLab.
+The installer isn't code-signed yet, so Windows SmartScreen may warn about it:
+choose *More info › Run anyway*. See the
+**[installation guide](docs/INSTALLATION.md)** for details and troubleshooting.
 
 ## Using it
 
-The **[user guide](docs/USER_GUIDE.md)** covers importing, editing, viewers,
-analysis tools, figures, jobs and sharing projects.
+The **[user guide](docs/USER_GUIDE.md)** (also under **?** in the app) covers
+importing, editing, viewers, analysis tools, figures, jobs and sharing projects.
 
-Your library normally lives in `%USERPROFILE%\Cladia`. Analysis tools and the
-Python environment are managed separately under `%LOCALAPPDATA%\Cladia`.
-Project ZIPs exclude settings, credentials, tool installations, local BLAST
-databases and original external reads. Bring those reads separately if you need
-to rerun a mapping.
+Imported files are copied into your library (`%USERPROFILE%\Cladia`); Cladia
+works on those copies and never changes the originals. Edits keep saved versions
+you can go back to, but these live beside the library: they are not a backup.
 
-## Optional tools
+## More tools
 
-Some tools are optional: Cladia includes their code, and **Settings → Tools** downloads
-the tool itself when you install it, from bioconda at an exact version with every
-package checked (**Clustal Omega**, **GetOrganelle**, **Krait repeat finder**, **MUSCLE**, **MACSE**, **RAxML-NG**, **MrBayes**, **tRNAscan-SE**, **ARAGORN**, **trimAl**, **ClipKIT**). Once
-installed they appear in their tool dialogs; they can be updated or uninstalled there.
-Built-in tools are listed too, with details and storage information. Adding a tool:
-see [the integration guide](docs/FEATURE_GUIDE.md) and
-[optional tools from bioconda](docs/PLAN_BIOCONDA_TOOLS.md).
+**Settings › Tools** lists every tool. Optional ones are downloaded when you install
+them there: Clustal Omega, MUSCLE, MACSE, trimAl, ClipKIT, RAxML-NG, MrBayes,
+tRNAscan-SE, ARAGORN, GetOrganelle and the Krait repeat finder. Once installed,
+they appear in the tool dialogs.
 
-## Development and project status
+## Development
 
-- [Contributing and running checks](CONTRIBUTING.md)
-- [Current priorities and limitations](docs/PROJECT_REVIEW.md)
-- [Tool and viewer integration guide](docs/FEATURE_GUIDE.md)
-- [Tool versions, sources and checks](docs/TOOL_VERSION_AUDIT.md)
-- [Documentation index](docs/README.md)
-
-Detailed design plans and implementation history are linked from the
-[documentation index](docs/README.md); they are not all outstanding work.
+To run Cladia from the source code, or to contribute, see
+[CONTRIBUTING.md](CONTRIBUTING.md) and the [documentation index](docs/README.md).
 
 ## License
 
-Cladia is released under the [MIT License](LICENSE). It runs other programs
-(MAFFT, IQ-TREE, BLAST+, minimap2, samtools, the optional bioconda tools and
-others) as separate programs, downloaded on your PC under their own licenses;
-none of them is included in this repository. See
-[the license audit](docs/LICENSE_AUDIT.md) for each one, and cite the tools you
-use: every job's log lists their citations.
+Cladia is released under the [MIT License](LICENSE). The analysis programs it
+runs are downloaded onto your PC under their own licenses; none is included in
+this repository (see [the license audit](docs/LICENSE_AUDIT.md)). Please cite the
+tools you use: every job's log lists their citations.
