@@ -23,7 +23,9 @@
   const MARGIN = 16, TOP = 14, SCALE = 30, STATUS = 20, SCROLLBAR = 10;
   const LABELS_FROM = 9;    // px per tip from which tip names are drawn
   const START = 16;         // px per tip a big tree opens with (names readable; it scrolls)
-  const MOST = 40;          // px per tip, most zoomed in
+  const MOST = 100;         // px per tip, most zoomed in (by hand)
+  const FIT_MOST = 40;      // px per tip at most when fitting (opening a small tree, Fit buttons)
+  const ASPECT = 1.5;       // fitting rows: branches at most this many times as wide as the rows are tall
   const HINT = "Ctrl+wheel: spread the tips · Ctrl+Shift+wheel: stretch the branches · wheel: up/down · " +
                "Shift+wheel: sideways · drag to move · Ctrl+click: toggle · Shift+click: range · double-click: collapse · right-click: menu";
 
@@ -242,7 +244,7 @@
     fitRows(rows, leftDepth) {
       if (!rows?.length) return;
       const first = rows[0].row, last = rows[rows.length - 1].row;
-      this.spacing = Math.min(MOST, Math.max(.001, (this.areaHeight - 2 * TOP) / (last - first + 1)));
+      this.spacing = Math.min(FIT_MOST, Math.max(.001, (this.areaHeight - 2 * TOP) / (last - first + 1)));
       const room = Math.max(1, this.areaWidth - 2 * MARGIN);
       let scale = this.fitXScale() * 200;
       for (const n of rows) {
@@ -253,6 +255,14 @@
           const remaining = room - (this.show.align ? 6 : 5) - this.labelPixels(n);
           if (labelDepth > leftDepth) scale = Math.min(scale, remaining / (labelDepth - leftDepth));
         }
+      }
+      // Short branches stretched over the whole width look smeared: keep the fitted
+      // branches in proportion to the rows' height (never narrower than the whole tree's fit).
+      let span = 0;
+      for (const n of rows) span = Math.max(span, (n.kids.length ? n.deepest : n.depth) - leftDepth);
+      if (span > 0) {
+        const tall = Math.min(this.areaHeight - 2 * TOP, (last - first + 1) * this.spacing);
+        scale = Math.min(scale, Math.max(this.fitXScale(), tall * ASPECT / span));
       }
       this.xScale = Math.max(1e-9, scale);
       let right = MARGIN + leftDepth * this.xScale;
