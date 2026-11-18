@@ -366,9 +366,12 @@
       return Number.isFinite(first) ? first : 0;
     }
 
-    // A node's row in the middle of the view
+    // A node's row in the middle of the view, unless it is already in view
     reveal(n) {
-      this.scrollY = TOP + (n.row + 0.5) * this.spacing - this.areaHeight / 2;
+      const y = this.yOf(n);
+      if (y < this.spacing || y > this.areaHeight - this.spacing) {
+        this.scrollY = TOP + (n.row + 0.5) * this.spacing - this.areaHeight / 2;
+      }
       const x = MARGIN + n.depth * this.xScale;
       const right = this.spacing >= LABELS_FROM ? this.labelRight(n) : x;
       if (x - this.scrollX < MARGIN || right - this.scrollX > this.areaWidth - MARGIN) {
@@ -452,15 +455,18 @@
 
     // ── Find ───────────────────────────────────────────────────────────────
     // Tips whose names contain the text; a collapsed clade counts when a tip in it does
+    // The current match stays current while it still matches (no jump back to the first)
     find(query, jump = true) {
+      const current = this.matches[this.matchIndex]?.index;
       this.query = query;
       const q = (query || "").trim().toLowerCase();
       this.matches = !q ? [] : this.rows.filter((n) => (n.kids.length
         ? this.tipNames(n.index).some((name) => name && name.toLowerCase().includes(q))
         : n.name && n.name.toLowerCase().includes(q)));
       this.matchSet = new Set(this.matches);
-      this.matchIndex = this.matches.length ? 0 : -1;
-      if (jump && this.matches.length) this.reveal(this.matches[0]); else this.draw();
+      const kept = this.matches.findIndex((n) => n.index === current);
+      this.matchIndex = kept >= 0 ? kept : this.matches.length ? 0 : -1;
+      if (jump && this.matches.length) this.reveal(this.matches[this.matchIndex]); else this.draw();
       return this.matches.length;
     }
 

@@ -101,6 +101,13 @@ for (const align of [false, true]) {
   assert(v.contentHeight() <= v.areaHeight + 1e-6);
   assert(v.scrollX === 0 && v.scrollY === 0);
   v.select(-1); const before = v.xScale; v.fitSelection(); assert.equal(v.xScale, before);
+  // Find leaves a match in view where it is, and keeps the current match while it still matches
+  v.spacing = 20; v.scrollY = 0; v.clampScroll();
+  v.find('Tip_1'); assert.equal(v.scrollY, 0, 'A match already in view does not move the tree');
+  v.findStep(1); v.findStep(1); const current = v.matches[v.matchIndex].name;
+  v.find('Tip_1'.slice(0, 4)); assert.equal(v.matches[v.matchIndex].name, current, 'A narrower/wider search keeps the current match');
+  v.find('Tip_199'); v.find('Tip_19'); assert.equal(v.matches[v.matchIndex].name, 'Tip_199');
+  assert(v.yOf(v.matches[v.matchIndex]) > 0 && v.yOf(v.matches[v.matchIndex]) < v.areaHeight, 'A match out of view is brought in');
 }
 
 {
