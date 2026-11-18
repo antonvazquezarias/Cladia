@@ -94,8 +94,14 @@ def kind_of(image):
     return next((kind for kind, d in DISTROS.items() if kind != "tools" and d["image"] == image), "tools")
 
 
-def registered():
-    proc = _checked(wsl("--list", "--quiet"), "Listing WSL distributions")
+def registered(*, timeout=None):
+    try:
+        proc = wsl("--list", "--quiet", timeout=timeout)
+    except FileNotFoundError as exc:
+        raise WslPrerequisiteError(_WSL_SETUP_HELP) from exc
+    if proc.returncode and "WSL_E_DEFAULT_DISTRO_NOT_FOUND" in _wsl_output(proc):
+        return set()
+    _checked(proc, "Listing WSL distributions")
     return {line.strip() for line in proc.stdout.splitlines() if line.strip()}
 
 
@@ -164,9 +170,29 @@ def meta(kind):
     return _read(LINUX_DIR / "environments" / f"{kind}.json")
 
 
+_WSL_SETUP_HELP = (
+    "Cladia's analysis tools require WSL 2. Open PowerShell as administrator and run "
+    "wsl.exe --install --no-distribution, then restart Windows and retry. "
+    "Cladia will prepare its own Linux distribution when you run the tool."
+)
+
+
+class WslPrerequisiteError(RuntimeError):
+    """Windows is missing a component required to run the tools."""
+
+
+def _wsl_output(proc):
+    # The inbox launcher can still write UTF-16 even with WSL_UTF8 set.
+    return (proc.stdout + proc.stderr).replace("\x00", "").strip()
+
+
 def _checked(proc, action):
     if proc.returncode:
-        raise RuntimeError(f"{action}: {(proc.stdout + proc.stderr).strip()[-2000:]}")
+        detail = _wsl_output(proc)
+        if any(code in detail for code in ("WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED",
+                                          "WSL_E_VIRTUAL_MACHINE_PLATFORM_REQUIRED")):
+            raise WslPrerequisiteError(f"{_WSL_SETUP_HELP}\n\n{action}: {detail[-2000:]}")
+        raise RuntimeError(f"{action}: {detail[-2000:] or f'exit code {proc.returncode}'}")
     return proc
 
 

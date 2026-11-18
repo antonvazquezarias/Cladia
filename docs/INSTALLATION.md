@@ -21,7 +21,9 @@ The installer
 sets up Cladia for your user only (no administrator rights, except for WSL if
 it is missing: Windows asks), downloads Python and
 its packages the first time (a console window shows it, a few minutes), and adds
-Cladia to the Start menu (and the desktop if you tick it). To update, run a newer
+Cladia to the Start menu (and the desktop if you tick it). If WSL setup requires a
+restart, restart Windows before running analyses, then add any selected optional
+tools in **Settings → Tools**. To update, run a newer
 installer: your library and saved versions are preserved.
 Close Cladia and let its jobs finish before updating or uninstalling. Setup checks
 for Python processes using Cladia's environment before replacing files; if one is
@@ -41,6 +43,18 @@ separate. Installing an optional tool needs an internet connection. The first
 tool run prepares the necessary environment. Your own WSL distributions are
 left alone. Uninstalling Cladia removes its managed Linux environments.
 
+### WSL optional component error
+
+If a job reports `WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED`, open PowerShell as
+administrator and run:
+
+```powershell
+wsl.exe --install --no-distribution
+```
+
+Restart Windows, open Cladia and retry the job. Cladia creates its own Linux
+distribution the first time a job needs it.
+
 ## From source
 
 Download or clone this repository and open its folder.
@@ -48,8 +62,8 @@ Download or clone this repository and open its folder.
 1. Double-click [setup.bat](../setup.bat). If there's no Python 3.11 or newer, it downloads
    Python 3.14.4 from python.org and installs it quietly for your user only (no
    administrator rights needed). Then it creates the Python environment, installs
-   packages, and checks for WSL in its own folder (`C:\Program Files\WSL\wsl.exe`);
-   if it's missing it offers to install it (Windows asks for permission; then
+   packages, and checks that WSL can list Linux distributions.
+   If the check fails it offers to install or repair WSL (Windows asks for permission; then
    restart the PC and run setup.bat again). If that fails, install the latest
    `.msi` from [Microsoft’s WSL releases](https://github.com/microsoft/WSL/releases). Running it again only does
    what's still needed. The environment lives in `%LOCALAPPDATA%\Cladia\venv`,

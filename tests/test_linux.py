@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from cladia import config, linux
+from cladia import config, linux, wsl_setup
 from conftest import EXAMPLE_IMAGE
 
 
@@ -216,6 +216,29 @@ def test_wsl_listing_errors_do_not_look_like_missing_installations(runtime, monk
     monkeypatch.setattr(linux, "wsl", lambda *a, **k: result(1, err="WSL unavailable"))
     with pytest.raises(RuntimeError, match="WSL unavailable"):
         linux.registered()
+
+
+def test_wsl_setup_checks_distribution_listing_even_if_version_succeeds(monkeypatch, capsys):
+    detail = ("Esta aplicación requiere el componente opcional Subsistema de Windows para Linux.\n"
+              "Código de error: Wsl/WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED")
+    listing = result(1, out=detail)
+    monkeypatch.setattr(linux, "wsl", lambda command, *args, **kw:
+                        result(out="Versión de WSL: 2.6.3") if command == "--version" else listing)
+
+    assert wsl_setup.main() == 2
+    output = capsys.readouterr().out
+    assert "wsl.exe --install --no-distribution" in output and detail in output
+    with pytest.raises(linux.WslPrerequisiteError, match="restart Windows and retry"):
+        linux.registered()
+
+    listing.returncode, listing.stdout = 0, ""
+    assert wsl_setup.main() == 0
+    assert linux.registered() == set()
+
+
+def test_wsl_listing_accepts_explicit_no_default_distro_error(monkeypatch):
+    monkeypatch.setattr(linux, "wsl", lambda *a, **k: result(1, err="Wsl/WSL_E_DEFAULT_DISTRO_NOT_FOUND"))
+    assert linux.registered() == set()
 
 
 def test_fresh_bootstrap_uses_one_distro_and_records_metadata(runtime, monkeypatch):

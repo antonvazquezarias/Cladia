@@ -1,4 +1,5 @@
 @echo off
+setlocal
 rem Setup: creates the Python environment and installs packages.
 rem Safe to run again: it skips whatever is already done.
 rem The environment lives outside this folder (%LOCALAPPDATA%\Cladia\venv), so
@@ -72,18 +73,9 @@ if errorlevel 1 (
 copy /y requirements.txt "%VENV%\requirements.installed" >nul
 
 :done
-rem 3. WSL 2: Cladia runs its tools in a Linux of its own (WSL distributions in
-rem    %LOCALAPPDATA%\Cladia\linux, made the first time a tool runs). Only WSL itself
-rem    is needed. The current WSL lives in Program Files\WSL; Windows' old one
-rem    (System32\wsl.exe alone) is updated or installed by full path.
-set "WSLDIR=%ProgramFiles%\WSL"
-if exist "%WSLDIR%\wsl.exe" (
-  "%WSLDIR%\wsl.exe" --version >nul 2>&1
-  if not errorlevel 1 (
-    echo WSL: ready, %WSLDIR%\wsl.exe
-    goto ready
-  )
-)
+rem 3. Check whether WSL can list distributions. Cladia creates its own on first use.
+"%VENV%\Scripts\python.exe" -X utf8 -m cladia.wsl_setup
+if not errorlevel 1 goto ready
 echo.
 echo Cladia needs WSL ^(Windows Subsystem for Linux^) to run its tools ^(MAFFT, annotation, trees, mapping, BLAST^).
 if /i "%~1"=="installer" goto installwsl
@@ -91,21 +83,25 @@ choice /c yn /n /m "Install or update WSL now? Windows asks for permission. [y/n
 if errorlevel 2 goto ready
 :installwsl
 "%SystemRoot%\System32\wsl.exe" --install --no-distribution
-if errorlevel 1 "%SystemRoot%\System32\wsl.exe" --update
-if exist "%WSLDIR%\wsl.exe" (
-  "%WSLDIR%\wsl.exe" --version >nul 2>&1
-  if not errorlevel 1 (
-    echo WSL: ready. If Windows asks you to restart, do so before the first job.
-    goto ready
-  )
-)
+set "WSL_INSTALL_EXIT=%errorlevel%"
+if "%WSL_INSTALL_EXIT%"=="3010" goto restartwsl
+if not "%WSL_INSTALL_EXIT%"=="0" "%SystemRoot%\System32\wsl.exe" --update
+"%VENV%\Scripts\python.exe" -X utf8 -m cladia.wsl_setup
+set "WSL_CHECK_EXIT=%errorlevel%"
+if "%WSL_CHECK_EXIT%"=="0" goto ready
+if "%WSL_CHECK_EXIT%"=="2" if "%WSL_INSTALL_EXIT%"=="0" goto restartwsl
 echo.
-echo WSL is not ready yet. Restart the PC and run setup.bat again.
-echo If it is still missing, install the latest WSL from
-echo https://github.com/microsoft/WSL/releases ^(the .msi for x64^), then run setup.bat again.
+echo WSL is not ready. In PowerShell as administrator, run:
+echo     wsl.exe --install --no-distribution
+echo Restart Windows and run setup.bat again.
 
 if /i not "%~1"=="installer" pause
 exit /b 1
+
+:restartwsl
+echo Restart Windows to finish setting up WSL before running Cladia's analysis tools.
+if /i not "%~1"=="installer" pause
+exit /b 3010
 
 :ready
 echo.

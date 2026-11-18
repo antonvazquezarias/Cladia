@@ -92,6 +92,7 @@ var
   ToolNumber, ToolCount, SkippedTools: Integer;
   CurrentTool: String;
   SetupLog: String;
+  WslNeedsRestart: Boolean;
 
 function CladiaIsRunning: Boolean;
 var
@@ -216,6 +217,11 @@ begin
   // The required application is not a downloaded optional tool.
   ToolCount := ToolCount - 1;
   if ToolCount <= 0 then Exit;
+  if WslNeedsRestart then
+  begin
+    Log('Add selected optional tools in Settings > Tools after Windows restarts.');
+    Exit;
+  end;
   ToolProgress.Show;
   try
     #include AddBackslash(Stage) + "optional-tool-runs.iss"
@@ -244,7 +250,8 @@ begin
       if not ExecAndLogOutput(ExpandConstant('{cmd}'), '/c ""' + ExpandConstant('{app}\setup.bat') + '" installer"',
         ExpandConstant('{app}'), SW_SHOWNORMAL, ewWaitUntilTerminated, ResultCode, @SetupOutput) then
         RaiseException('Could not start application setup. Details: ' + SetupLog);
-      if ResultCode <> 0 then
+      WslNeedsRestart := ResultCode = 3010;
+      if (ResultCode <> 0) and not WslNeedsRestart then
         RaiseException('Application setup failed. Run setup.bat to retry. Details: ' + SetupLog);
     finally
       ToolProgress.ProgressBar.Style := npbstNormal;
@@ -255,6 +262,11 @@ begin
     Lines[0] := ExpandConstant('{src}');
     SaveStringsToUTF8File(ExpandConstant('{app}\UPDATES_FROM'), Lines, False);
   end;
+end;
+
+function NeedRestart: Boolean;
+begin
+  Result := WslNeedsRestart;
 end;
 
 procedure InitializeWizard;
@@ -275,3 +287,4 @@ end;
 ComponentsDiskSpaceMBLabel=Estimated selection: [mb] MB, excluding Python, Linux, caches and databases.
 ComponentsDiskSpaceGBLabel=Estimated selection: [gb] GB, excluding Python, Linux, caches and databases.
 FinishedLabel=Cladia is installed. The first time a tool runs (Align, Annotate, a tree...), Cladia prepares its own Linux: a few minutes, once. Your library is in %USERPROFILE%\Cladia.
+FinishedRestartLabel=Cladia is installed. Restart Windows before running analysis tools. If you selected optional tools, you can add them in Settings > Tools after restarting.%n%nWould you like to restart now?
