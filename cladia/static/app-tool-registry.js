@@ -858,8 +858,7 @@ async function submitRegisteredTool(form, event) {
   if (problem) { error.textContent = problem; error.hidden = false; return; }
   const body = {
     operation: form._operation.id, engine: form._engine.id,
-    inputs: { ...Object.fromEntries(Object.entries(form._pickers).map(([key, picker]) =>
-      [key, key === "queries" ? picker.ids() : picker.asPicked()])),
+    inputs: { ...Object.fromEntries(Object.entries(form._pickers).map(([key, picker]) => [key, picker.asPicked()])),
       ...Object.fromEntries(Object.entries(form._textInputs || {}).map(([key, field]) => [key, [field.value.trim()]])),
       ...Object.fromEntries(Object.entries(form._specialInputs || {}).filter(([, value]) => value?.length)),
       ...Object.fromEntries(Object.entries(form._fileInputs || {}).map(([key, field]) =>

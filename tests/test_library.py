@@ -287,6 +287,53 @@ def test_group_and_split_undo_redo_keep_item_ids(setup):
     assert library.get_item(grouped)["id"] == grouped
 
 
+def test_group_other_items_preserves_ids_and_undo(setup):
+    files, client = setup
+    client.headers["X-Cladia-Window"] = "item-list-test"
+    found = _import(client, files, "set.fasta", "aln.fasta")
+    members = [found[name]["id"] for name in ("set", "aln")]
+    originals = {i: library.get_item(i)["path"] for i in members}
+    response = client.post("/api/library/group", json={"ids": members, "name": "Results"})
+    assert response.status_code == 200, response.text
+    group = response.json()["id"]
+    assert library.get_item(group)["kind"] == "item_list"
+    assert library.get_item(group)["count"] == 2
+    assert {i: library.get_item(i)["path"] for i in members} == originals
+    assert all(library.get_item(i)["group"] == group for i in members)
+    assert len(library.children(library.get_item(members[0]))) == 2
+
+    assert client.post("/api/library/action-history", json={}).status_code == 200
+    assert all("group" not in library.get_item(i) for i in members)
+    assert client.post("/api/library/action-history", json={"redo": True}).status_code == 200
+    assert all(library.get_item(i)["group"] == group for i in members)
+
+    response = client.post("/api/library/split", json={"ids": [group]})
+    assert response.status_code == 200, response.text
+    assert set(response.json()["ids"]) == set(members)
+    assert group not in library.item_map()
+    assert all("group" not in library.get_item(i) for i in members)
+
+
+def test_drop_other_item_on_sequence_list_then_take_it_out(setup):
+    files, client = setup
+    found = _import(client, files, "set.fasta", "aln.fasta")
+    sequences, alignment = (found[name]["id"] for name in ("set", "aln"))
+    response = client.post("/api/library/add-to-list", json={"id": sequences, "ids": [alignment]})
+    assert response.status_code == 200, response.text
+    group = response.json()["id"]
+    assert response.json()["added"] == 1
+    assert library.get_item(sequences)["group"] == group
+    assert library.get_item(alignment)["group"] == group
+    assert client.post("/api/library/add-to-list", json={"id": group, "ids": [group]}).status_code == 400
+
+    library.add_folder("Other")
+    response = client.post("/api/library/take-out", json={"ids": [alignment], "folder": "Other"})
+    assert response.json() == {"ids": [alignment]}
+    assert library.get_item(alignment)["folder"] == "Other"
+    assert "group" not in library.get_item(alignment)
+    assert library.get_item(group)["count"] == 1
+
+
 def test_group_undo_refuses_modified_result(setup):
     files, client = setup
     items = _import(client, files, "set.fasta")

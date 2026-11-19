@@ -149,9 +149,10 @@ def _run(job, func, params):
         job["log"] += f"\n── {live.name} ──\n" + text[-50000:]
     run_details.observed_versions(job)
     job["finished"] = time.time()
-    created_outputs = [] if job.get("_preserve_outputs") else [o for o in job["outputs"] if not o.get("updated")]
+    outputs = [*job["outputs"], *job.pop("_grouped_outputs", [])]
+    created_outputs = [] if job.get("_preserve_outputs") else [o for o in outputs if not o.get("updated")]
     try:
-        if job["outputs"] and not job.get("_preserve_outputs"):
+        if outputs and not job.get("_preserve_outputs"):
             inputs = []
             for value in params.values():
                 candidates = value if isinstance(value, list) else [value]
@@ -160,7 +161,7 @@ def _run(job, func, params):
                         inputs.append({"id": item["id"], "label": item["label"]})
             provenance = {"job_id": job["id"], "kind": job["kind"], "title": job["title"],
                           "finished": job["finished"], "status": outcome, "inputs": inputs, **job.get("_run_details", {})}
-            library.set_provenance([o["id"] for o in job["outputs"]], provenance)
+            library.set_provenance([o["id"] for o in outputs], provenance)
         if created_outputs:
             _place_outputs(job, created_outputs)
     except (OSError, ValueError, KeyError) as exc:

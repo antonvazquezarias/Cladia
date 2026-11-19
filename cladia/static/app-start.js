@@ -96,13 +96,15 @@ for (const [name, action] of [["blastdb_path", addBlastDb], ["blastdb_add_name",
 }
 $("sidebar-edge").onmousedown = dragSidebarEdge;
 $("sidebar-edge").ondblclick = () => { setSidebarWidth(290); try { localStorage.removeItem("cladia.sidebar"); } catch (e) {} };
-// The list itself takes a list's sequences dragged out of it (a list row handles
-// its own drops; a sequence dropped back on its own list stays)
+// The sidebar takes items dragged out of a list; each list handles its own drops.
 $("lists").addEventListener("dragover", (e) => {
   if (!takesOut()) return;
   const li = e.target.closest?.("#lists li[data-id]");
   const it = li && itemById(li.dataset.id);
-  if (it && (it.kind === "list" || it.parent) && draggedIds.every((id) => [it.id, it.parent].includes(itemById(id)?.parent))) {
+  if (it && draggedIds.every((id) => {
+    const owner = listOwner(itemById(id));
+    return owner && [it.id, listOwner(it)].includes(owner);
+  })) {
     $("lists").classList.remove("drop-out");  // over its own list: nothing happens there
     return;
   }
@@ -156,10 +158,10 @@ $("lists").addEventListener("keydown", (e) => {
     })();
     return;
   }
-  // Ctrl+A: everything the list shows (a list stands for its sequences)
+  // Ctrl+A selects top-level rows; a list has its own row.
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a" && !["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) {
     e.preventDefault();
-    const all = Object.keys(LIST_ELEMENTS).flatMap(visibleRows).filter((it) => !it.parent && !it.missing).map((it) => it.id);
+    const all = Object.keys(LIST_ELEMENTS).flatMap(visibleRows).filter((it) => !listOwner(it) && !it.missing).map((it) => it.id);
     const previous = [...selected], previousAnchor = anchorId;
     selected = all;
     anchorId = all[0] || null;

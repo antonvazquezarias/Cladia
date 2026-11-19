@@ -121,7 +121,7 @@ function renderFolderTree() {
   const filter = $("folder-filter").value.trim().toLowerCase();
   const children = new Set(folders.map(parentOf).filter(Boolean));
   const counts = new Map(), totals = new Map();
-  for (const it of items) if (!it.parent) {
+  for (const it of items) if (!listOwner(it)) {
     const path = it.folder || "";
     counts.set(path, (counts.get(path) || 0) + 1);
     for (let p = path; p; p = parentOf(p)) totals.set(p, (totals.get(p) || 0) + 1);
@@ -239,7 +239,7 @@ function springOpen(path) {
 function dropOn(el, path, over = null) {
   const takes = () => draggedIds?.some(id => {
     const it = itemById(id);
-    return it && (it.parent || (it.folder || null) !== path);
+    return it && (listOwner(it) || (it.folder || null) !== path);
   }) || draggedFolder && !inside(path, draggedFolder) && parentOf(draggedFolder) !== path;
   el.ondragover = e => { if (takes()) { e.preventDefault(); el.classList.add("drop"); over?.(); } };
   el.ondragleave = e => { if (!el.contains(e.relatedTarget)) { el.classList.remove("drop"); cancelFolderSpring(); } };
@@ -272,7 +272,7 @@ function openFolderMenu(at, moving = null, movingFolder = null) {
     button.textContent = folder ? `${"\u2003".repeat(folder.split("/").length - 1)}📁 ${baseName(folder)}` : "Library (no folder)";
     button.title = folder || "Library (no folder)";
     button.disabled = !!moving?.length && moving.every(id => {
-      const it = itemById(id); return it && !it.parent && (it.folder || null) === folder;
+      const it = itemById(id); return it && !listOwner(it) && (it.folder || null) === folder;
     });
     button.onclick = () => { closeListMenu(); movingFolder ? moveFolder(movingFolder, folder) : moveToFolder(moving, folder); };
     menu.append(button);
@@ -290,8 +290,9 @@ function openFolderMenu(at, moving = null, movingFolder = null) {
 
 async function moveToFolder(ids, folder, navigate = false) {
   if (!ids?.length) return false;
-  const members = ids.filter(id => itemById(id)?.parent && !ids.includes(itemById(id).parent));
-  const whole = ids.filter(id => !members.includes(id));
+  const moving = ids.filter(id => !listAncestors(itemById(id)).some(owner => ids.includes(owner)));
+  const members = moving.filter(id => listOwner(itemById(id)));
+  const whole = moving.filter(id => !members.includes(id));
   if (members.length && hasUnsavedChanges()) { toast("Save (or undo) your changes first (Ctrl+S)", true); return false; }
   const viewed = [...shownIds], originalItems = new Map(items.map(it => [it.id, it]));
   let extracted = null, failure = null;
@@ -340,7 +341,7 @@ async function moveFolder(path, parent) {
 
 function folderDialog({renaming = null, parent = null, moving = null} = {}) {
   closeFolderPopup();
-  if (moving?.some(id => itemById(id)?.parent) && hasUnsavedChanges()) return toast("Save (or undo) your changes first (Ctrl+S)", true);
+  if (moving?.some(id => listOwner(itemById(id))) && hasUnsavedChanges()) return toast("Save (or undo) your changes first (Ctrl+S)", true);
   const dialog = $("folder-dialog"), form = dialog.querySelector("form"), submit = form.querySelector('[value="ok"]');
   const cancel = form.querySelector('[value="cancel"]');
   $("folder-dialog-title").textContent = renaming ? `Rename ${baseName(renaming)}` : parent ? `New folder in ${baseName(parent)}` : "New folder";
@@ -370,7 +371,7 @@ function folderDialog({renaming = null, parent = null, moving = null} = {}) {
 }
 
 async function deleteFolder(path) {
-  const n = items.filter(it => !it.parent && inside(it.folder, path)).length, up = parentOf(path);
+  const n = items.filter(it => !listOwner(it) && inside(it.folder, path)).length, up = parentOf(path);
   if (!confirm(`Remove the folder ${baseName(path)}?\n\nIts ${n} item${n === 1 ? "" : "s"} and any subfolders move up to ${up || "the library's top"}. No items are deleted. Conflicting folder names must be resolved first.`)) return;
   try {
     await api("POST", "/api/folders/delete", {name: path});

@@ -249,7 +249,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 .file-list li.selected { background: var(--accent-soft); font-weight: 600; }
 .file-list li.missing { color: var(--muted); text-decoration: line-through; }
 .file-list li.busy { color: var(--muted); cursor: progress; }
-.file-list li.child { padding-left: 28px; }
+.file-list li.child { padding-left: calc(12px + 16px * var(--list-depth, 1)); }
 .file-list input.rename { width: calc(100% - 20px); font: inherit; padding: 1px 4px; border: 1px solid var(--accent); border-radius: 3px; }
 /* renaming: the box takes the row's room (beside a list's arrow); the row's "…"
    would otherwise hide the whole box when it doesn't fit */

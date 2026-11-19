@@ -91,14 +91,27 @@ def validate_tool_request(req):
         elif slot["docType"] == "blast_queries":
             if len(ids) < slot["min"]:
                 raise InputError(400, "Choose a BLAST query")
+            queries, list_members = [], {}
             for query in ids:
                 item_id = query if isinstance(query, str) else query.get("item") if isinstance(query, dict) else None
                 if not isinstance(item_id, str):
                     raise InputError(400, "Invalid BLAST query")
                 item = _item_in(by_id, item_id)
-                if isinstance(query, str) and item["kind"] != "sequence":
-                    raise InputError(400, "Choose sequences for BLAST")
-            resolved[key] = ids
+                if isinstance(query, str):
+                    if item["kind"] == "list":
+                        for member in library.children(item, by_id.values()):
+                            if member["id"] not in list_members:
+                                list_members[member["id"]] = item["id"]
+                                queries.append((member["id"], True))
+                        continue
+                    if item["kind"] != "sequence":
+                        raise InputError(400, "Choose sequences for BLAST")
+                queries.append((query, False))
+            resolved[key] = [query for query, from_list in queries
+                             if from_list or not isinstance(query, str) or query not in list_members]
+            resolved["query_lists"] = list_members
+            if len(resolved[key]) < slot["min"]:
+                raise InputError(400, "Choose a BLAST query")
         elif slot["docType"] in {"accessions", "ncbi_search"}:
             if not ids or any(not isinstance(a, str) for a in ids):
                 raise InputError(400, "Choose accession numbers to download")

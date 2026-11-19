@@ -116,25 +116,39 @@ const expanded = new Set();  // ids of the lists shown open
 let folders = [];            // folder names (/api/folders)
 let currentFolder = localStorage.getItem("cladia.folder") || null;  // the folder shown; null: items at the library root
 const inFolder = (it) => !!$("filter").value.trim() || (it.folder || null) === currentFolder;  // the filter: every folder
+const isLibraryList = (it) => it.kind === "list" || it.kind === "item_list";
+const listOwner = (it) => it?.parent || it?.group;
+function listAncestors(it) {
+  const seen = new Set();
+  for (let id = listOwner(it); id && !seen.has(id); id = listOwner(itemById(id))) seen.add(id);
+  return [...seen];
+}
 const section = (it) => {
+  if (listOwner(it)) return "sequence";  // children are rendered in their list's section
   if (it.kind === "primers") return it.mode === "test" ? "pcr" : "primers";  // designs and tests apart
   return ["alignment", "comparison", "tree", "graph", "mapping", "blast", "figure", "variants", "reads"].includes(it.kind) ? it.kind : "sequence";
 };
 const LIST_ELEMENTS = { sequence: "sequences", alignment: "alignments", comparison: "comparisons", reads: "reads", mapping: "mappings",
                         tree: "trees", graph: "graphs", figure: "figures", variants: "variants", blast: "blasts", primers: "primers", pcr: "pcrs" };
 const childrenOf = (list) => items.filter((c) => c.parent === list.id).sort((a, b) => a.record - b.record);
+const listMembers = (list) => list.kind === "list" ? childrenOf(list)
+  : items.filter((it) => it.group === list.id).sort((a, b) => (a.group_order ?? -1) - (b.group_order ?? -1));
 
 // The rows of one section, in display order
 function visibleRows(name) {
   const filter = $("filter").value.trim().toLowerCase();
   const hit = (it) => [it.label, it.organism, it.description, it.search].some((s) => s && s.toLowerCase().includes(filter));
   const rows = [];
-  for (const it of items.filter((x) => !x.parent && section(x) === name && inFolder(x))) {
-    const kids = it.kind === "list" ? childrenOf(it) : [];
-    if (!hit(it) && !kids.some(hit)) continue;
+  function add(it, parentMatches = false) {
+    const matches = parentMatches || hit(it);
+    const start = rows.length;
     rows.push(it);
-    if (expanded.has(it.id) || filter) rows.push(...kids.filter((k) => hit(k) || hit(it)));
+    if (isLibraryList(it) && (expanded.has(it.id) || filter)) {
+      for (const child of listMembers(it)) add(child, matches);
+    }
+    if (!matches && rows.length === start + 1) rows.pop();
   }
+  for (const it of items.filter((x) => !listOwner(x) && section(x) === name && inFolder(x))) add(it);
   return rows;
 }
 
@@ -161,7 +175,7 @@ function renderList() {
       // the row's first line never wraps (only the name shortens); the description goes under it
       const line = Object.assign(document.createElement("div"), { className: "line" });
       li.append(line);
-      if (it.kind === "list") {
+      if (isLibraryList(it)) {
         const twisty = document.createElement("span");
         twisty.className = "twisty";
         twisty.textContent = expanded.has(it.id) ? "▾" : "▸";
@@ -186,7 +200,9 @@ function renderList() {
         li.append(Object.assign(document.createElement("span"), { className: "sub", textContent: it.description }));
       }
       if (it.missing) li.title = `Cladia's copy is gone: ${it.path}`;  // (others: the hover card, not a second tooltip)
-      li.classList.toggle("child", !!it.parent);
+      const depth = listAncestors(it).length;
+      li.classList.toggle("child", depth > 0);
+      if (depth > 1) li.style.setProperty("--list-depth", depth);
       li.classList.toggle("renaming", renaming === it.id);
       li.classList.toggle("selected", chosen.has(it.id));
       li.classList.toggle("missing", it.missing);
@@ -195,11 +211,25 @@ function renderList() {
       li.dataset.id = it.id;
       li.draggable = !viewIds && !it.missing;  // onto a folder (the folder button's menu), or a list
       li.ondragstart = (e) => itemDragStart(e, it);
-      if (it.kind === "list") {  // dropped sequences go into it
-        const takes = () => draggedIds && !draggedIds.includes(it.id) && !draggedIds.every((id) => itemById(id)?.parent === it.id);
-        li.ondragover = (e) => { if (takes()) { e.preventDefault(); li.classList.add("drop-target"); } };
+      if (isLibraryList(it)) {
+        const takes = () => draggedIds && !draggedIds.some((id) => id === it.id || listAncestors(it).includes(id))
+          && !draggedIds.every((id) => listOwner(itemById(id)) === it.id);
+        li.ondragover = (e) => {
+          if (!takes()) return;
+          e.preventDefault();
+          e.stopPropagation();
+          $("lists").classList.remove("drop-out");
+          li.classList.add("drop-target");
+        };
         li.ondragleave = () => li.classList.remove("drop-target");
-        li.ondrop = (e) => { if (!takes()) return; e.preventDefault(); li.classList.remove("drop-target"); dropIntoList(it, draggedIds); };
+        li.ondrop = (e) => {
+          if (!takes()) return;
+          e.preventDefault();
+          e.stopPropagation();
+          $("lists").classList.remove("drop-out");
+          li.classList.remove("drop-target");
+          dropIntoList(it, draggedIds);
+        };
       }
       li.onclick = (e) => { hideCard(); clickItem(it, e); };
       cardFor(li, it);
@@ -625,8 +655,10 @@ async function removeSelected() {
   if (!selected.length) return;
   const ids = [...selected];
   const what = ids.length === 1 ? itemById(ids[0])?.label : `${ids.length} items`;
+  const keepsMembers = ids.some(id => itemById(id)?.kind === "item_list");
   if (!confirm(`Delete ${what} from Cladia?\n\nIt goes to the trash (Settings > Storage), where it can be restored ` +
-               "or deleted for good. The original files you imported are not affected.")) return;
+               "or deleted for good. The original files you imported are not affected." +
+               (keepsMembers ? " Items inside a mixed list stay in the library unless you select them too." : ""))) return;
   // their figures: along with them, or left (marked as missing their source until it is restored)
   const sources = ids.map(itemById).filter(Boolean).flatMap((it) => it.kind === "list" ? [it, ...childrenOf(it)] : [it]);
   const figures = [...new Set(sources.flatMap(figuresOf).map((f) => f.id))].filter((id) => !ids.includes(id));
@@ -652,7 +684,7 @@ async function removeSelected() {
 // A sequence list becomes separate sequences
 async function splitSelected() {
   const list = itemById(selected[0]);
-  if (!list || list.kind !== "list") return;
+  if (!list || !isLibraryList(list)) return;
   if (seqShown?.items[0]?.parent === list.id && hasUnsavedChanges()) {
     toast("Save the open sequence first (Ctrl+S)", true);
     return;
@@ -662,9 +694,9 @@ async function splitSelected() {
   await loadList();
   selected = ids;
   anchorId = ids[0];
-  showSelection();
   renderList();
-  toast(`${list.label} split into ${ids.length} sequences`);
+  showSelection();
+  toast(list.kind === "list" ? `${list.label} split into ${ids.length} sequences` : `Ungrouped ${list.label}`);
 }
 
 // Sequences (and lists) moved into one new list, as if imported from one file;
@@ -681,6 +713,7 @@ async function groupSelected(ids = [...selected], name = "New list", rename = tr
     seqKey = null;
     selected = [id];
     anchorId = id;
+    lastClick = { id: null, at: 0 };
     expanded.add(id);
     await loadList();
     showSelection();
@@ -694,11 +727,11 @@ async function groupSelected(ids = [...selected], name = "New list", rename = tr
 // Taking members out preserves each source list's folder. Drag/drop uses
 // moveToFolder instead, with an explicit destination.
 function takesOut() {
-  return draggedIds?.some((id) => itemById(id)?.parent);
+  return draggedIds?.some((id) => listOwner(itemById(id)));
 }
 
 async function takeOutOfLists(ids) {
-  const members = ids.filter((id) => itemById(id)?.parent);
+  const members = ids.filter((id) => listOwner(itemById(id)) && !listAncestors(itemById(id)).some(owner => ids.includes(owner)));
   if (!members.length) return;
   if (hasUnsavedChanges()) return toast("Save (or undo) your changes first (Ctrl+S)", true);
   try {
@@ -709,24 +742,26 @@ async function takeOutOfLists(ids) {
     anchorId = made[0];
     showSelection();
     renderList();
-    toast(`${made.length} sequence${made.length === 1 ? "" : "s"} taken out of ${made.length === 1 ? "its list" : "their lists"}`);
+    toast(`${made.length} item${made.length === 1 ? "" : "s"} taken out of ${made.length === 1 ? "its list" : "their lists"}`);
   } catch (e) {
     toast(e.message, true);
   }
 }
 
-// Sequences dragged onto a list move into it, at its end (a list dropped: its sequences)
+// The server preserves whole items when a drop needs a mixed list.
 async function dropIntoList(list, ids) {
-  const moving = ids.filter((id) => ["sequence", "list"].includes(itemById(id)?.kind));
-  if (!moving.length) return toast("Only sequences can go into a list", true);
   if (hasUnsavedChanges()) return toast("Save (or undo) your changes first (Ctrl+S)", true);
   try {
-    const { added } = await api("POST", "/api/library/add-to-list", { id: list.id, ids: moving });
+    const { added, id = list.id } = await api("POST", "/api/library/add-to-list", { id: list.id, ids });
     seqKey = null;
-    expanded.add(list.id);
+    expanded.add(id);
+    if (id !== list.id) {
+      selected = [id];
+      anchorId = id;
+    }
     await loadList();
     showSelection();
-    toast(`${added} sequence${added === 1 ? "" : "s"} moved into ${list.label}`);
+    if (added) toast(`${added} item${added === 1 ? "" : "s"} moved into ${list.label}`);
   } catch (e) {
     toast(e.message, true);
   }
@@ -1016,6 +1051,7 @@ async function finishRename(it, name) {
         seqShown.items[shown] = itemById(seqShown.items[shown].id);
         renderEditButtons();
       }
+      if (it.kind === "item_list" && shownIds.includes(it.id)) showSelection(shownIds);
       toast(`Renamed to ${name.trim()}`);
     } catch (e) {
       toast(`Rename failed: ${e.message}`, true);
@@ -1056,17 +1092,20 @@ function openListMenu(e, it) {
   }
   const chosen = selected.map(itemById).filter(Boolean);
   const one = chosen.length === 1 ? chosen[0] : null;
-  const groupable = chosen.length > 1 && chosen.every((x) => ["sequence", "list"].includes(x.kind) && !x.missing);
+  const groupable = chosen.length > 1 && chosen.every((x) => !x.missing);
+  const hasItemList = chosen.some((it) => it.kind === "item_list");
   const sequences = chosen.every((x) => ["sequence", "list"].includes(x.kind));
   const contigCount = chosen.reduce((n, x) => n + (x.kind === "list" ? childrenOf(x).length : 1), 0);  // (a graph needs 2 or more)
   const entries = it && chosen.length ? [
     ["Open in new window", openInNewWindow],
     "-",  // organise
     ["Rename", () => startRename(), !one || one.missing, null, "F2"],
-    ["Duplicate", duplicateSelected, false, null, "Ctrl+D"],
+    ["Duplicate", duplicateSelected, hasItemList, null, "Ctrl+D"],
     ["Move to folder…", () => openFolderMenu(e, selected)],
     groupable && ["Group into a list", () => groupSelected()],
     one?.kind === "list" && ["Split into sequences", splitSelected],
+    one?.kind === "item_list" && ["Ungroup items", splitSelected],
+    chosen.some(listOwner) && ["Take out of list", () => takeOutOfLists(selected)],
     "-",  // what's in them
     one?.kind === "sequence" && ["Import annotations or a data track…", () => pickAnnotations(one)],
     sequences && ["Remove annotations…", removeAnnotations],
@@ -1077,7 +1116,7 @@ function openListMenu(e, it) {
     one?.kind === "mapping" && ["Consensus as new sequence", () => consensusAsSequence(one.id)],
     one?.kind === "reads" && one.read_files?.length && ["Delete the read files (keep the report)…", () => dropReadFiles(one)],
     "-",  // out of Cladia
-    !chosen.some((x) => ["blast", "primers", "reads"].includes(x.kind)) && ["Export…", openExport],
+    !chosen.some((x) => ["blast", "primers", "reads", "item_list"].includes(x.kind)) && ["Export…", openExport],
     one?.original && !one.parent && ["Export to original location…", () => writeBack(one), !one.original.format],
     one?.original && ["Show original in Explorer", () => revealOriginal(one)],
     "-",
@@ -1323,6 +1362,7 @@ async function writeBack(it) {
 async function duplicateSelected() {
   const ids = [...selected];
   if (!ids.length) return;
+  if (ids.some(id => itemById(id)?.kind === "item_list")) return toast("Select the items inside the list to duplicate them", true);
   const { ids: made } = await api("POST", "/api/library/duplicate", { ids });
   await loadList();
   const unsaved = hasUnsavedChanges() && seqShown?.items.some((it) => ids.includes(it.id)) ? " (as last saved)" : "";
@@ -1483,7 +1523,7 @@ function hideCard() {
 
 async function showCard(li, it) {
   if (it.missing || renaming === it.id) return;
-  const key = `${it.id}:${it.mtime}`;
+  const key = `${it.id}:${it.mtime}:${it.kind === "item_list" ? it.count : ""}`;
   if (!infoCache.has(key)) {
     try { infoCache.set(key, await api("GET", `/api/info/${it.id}`)); } catch (e) { return; }
   }
@@ -1515,6 +1555,8 @@ async function showCard(li, it) {
   } else if (info.kind === "list") {
     line(`${n(info.count)} sequences · ${n(info.total)} ${info.unit} in all · ${n(info.min)}–${n(info.max)} ${info.unit} each`);
     line(organisms(info.organisms, info.organism_count), "organism");
+  } else if (info.kind === "item_list") {
+    line(`${n(info.count)} item${info.count === 1 ? "" : "s"}`);
   } else if (info.kind === "alignment") {
     line(`Alignment of ${n(info.count)} sequences · ${n(info.columns)} columns`);
     line(organisms(info.organisms, info.organism_count), "organism");
@@ -1797,26 +1839,29 @@ const hiddenType = (type) => seqShow.hiddenTypes.includes(type);
 // Returns false if the user chose to keep unsaved changes (nothing changes then).
 // Only sequences and lists open together. Any other selection of several items shows what
 // is selected instead of one of them (it used to be whichever kind came first in a fixed order).
-const KIND_NOUNS = { sequence: ["sequence", "sequences"], list: ["sequence list", "sequence lists"], alignment: ["alignment", "alignments"],
+const KIND_NOUNS = { sequence: ["sequence", "sequences"], list: ["sequence list", "sequence lists"], item_list: ["list", "lists"], alignment: ["alignment", "alignments"],
                      comparison: ["genome comparison", "genome comparisons"], mapping: ["mapping", "mappings"], variants: ["variant set", "variant sets"],
                      reads: ["read set", "read sets"], tree: ["tree", "trees"], graph: ["assembly graph", "assembly graphs"],
                      figure: ["figure", "figures"], blast: ["BLAST result", "BLAST results"], primers: ["primer result", "primer results"] };
 const PLACEHOLDER = $("placeholder").innerHTML;
-function showSummary(chosen) {
+function showSummary(chosen, list) {
   const counts = {};
   for (const it of chosen) counts[it.kind] = (counts[it.kind] || 0) + 1;
   const parts = Object.keys(KIND_NOUNS).filter((kind) => counts[kind]).map((kind) => `${counts[kind]} ${KIND_NOUNS[kind][counts[kind] === 1 ? 0 : 1]}`);
   const p = document.createElement("p"), b = document.createElement("b");
-  b.textContent = `${chosen.length} items selected`;
+  b.textContent = list ? `${list.label} · ${chosen.length} item${chosen.length === 1 ? "" : "s"}` : `${chosen.length} items selected`;
   p.append(b, document.createElement("br"), parts.join(", "), document.createElement("br"),
-           "Select one to open it; sequences and sequence lists open together. Right-click for what can be done with all of them.");
+           list ? "Expand the list and select an item to open it."
+             : "Select one to open it; sequences and sequence lists open together. Right-click for what can be done with all of them.");
   $("placeholder").replaceChildren(p);
   showView("placeholder");
 }
 
 function showSelection(selection = selected) {
-  const chosen = selection.map(itemById).filter((it) => it && !it.missing);
-  const summary = chosen.length > 1 && !chosen.every((it) => ["sequence", "list"].includes(it.kind));
+  const picked = selection.map(itemById).filter((it) => it && !it.missing);
+  const itemList = picked.length === 1 && picked[0].kind === "item_list" ? picked[0] : null;
+  const chosen = itemList ? listMembers(itemList) : picked;
+  const summary = itemList || (chosen.length > 1 && !chosen.every((it) => ["sequence", "list"].includes(it.kind)));
   if (!chosen.some((it) => it.kind === "mapping")) stopMappingReads();  // the reads lane goes with the mapping
   // A sequence list stands for its sequences
   const sequences = [];
@@ -1845,12 +1890,12 @@ function showSelection(selection = selected) {
     seqKey = null;
   }
 
-  if (metadataItem && (chosen.length !== 1 || chosen[0].id !== metadataItem.id)) clearMetadata();
+  if (metadataItem && (picked.length !== 1 || picked[0].id !== metadataItem.id)) clearMetadata();
 
-  markSeen(chosen);  // (the title stays until the new item's replaces it: no blank in between)
+  markSeen(picked);  // (the title stays until the new item's replaces it: no blank in between)
 
   if (summary) {
-    showSummary(chosen);
+    showSummary(chosen, itemList);
   } else if (sequences.length === 1) {
     showSingle(sequences[0]);
   } else if (sequences.length > 1) {
@@ -1877,8 +1922,8 @@ function showSelection(selection = selected) {
     $("placeholder").innerHTML = PLACEHOLDER;
     showView("placeholder");
   }
-  shownIds = chosen.map(it => it.id);
-  syncSidePanel(chosen);
+  shownIds = picked.map(it => it.id);
+  syncSidePanel(picked);
   scheduleToolStates();
   shownVersion = versionOf(shownIds);
   return true;

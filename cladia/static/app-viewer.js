@@ -905,7 +905,12 @@ window.addEventListener("pagehide", () => {  // the window closes: its locks go 
 // What this window shows, as last loaded or saved (item file times): another
 // window's change shows here (when this one has no unsaved changes of its own)
 let shownVersion = "", shownIds = [];
-const versionOf = (ids) => ids.map((id) => itemById(id)?.mtime).join(",");
+const versionOf = (ids) => ids.map((id) => {
+  const it = itemById(id);
+  return it?.kind === "item_list"
+    ? JSON.stringify([it.label, listMembers(it).map(member => member.id)])
+    : it?.mtime;
+}).join(",");
 
 async function refreshShown({ focus = false } = {}) {
   if (focus && listVersion) {

@@ -36,6 +36,8 @@ def _submission_records(req):
 
 def _export_text(chosen, fmt, codes=None):
     """The items as text in an export format (not BAM)."""
+    if any(it["kind"] == "item_list" for it in chosen):
+        raise InputError(400, "Select the items inside the list to export them")
     if any(it["kind"] in ("blast", "primers") for it in chosen):
         raise InputError(400, "A BLAST or primer result is a table: export it as CSV from its own view")
     if any(it["kind"] == "figure" for it in chosen):

@@ -23,7 +23,7 @@ VERSION = 1
 MAX_FILES = 100000
 MAX_BYTES = 50 * 2**30  # uncompressed archive; large kept BAMs are allowed
 MAX_HISTORY_BLOB = 512 * 2**20
-KINDS = {"sequence", "list", "alignment", "tree", "mapping", "comparison", "blast", "primers", "graph", "figure", "variants", "reads"}
+KINDS = {"sequence", "list", "item_list", "alignment", "tree", "mapping", "comparison", "blast", "primers", "graph", "figure", "variants", "reads"}
 LINK_KEYS = {"item", "id", "reference_item", "from_id", "source"}  # source: what a figure draws
 
 
@@ -58,6 +58,10 @@ def _entry(entry):
             raise ValueError("Library files must have simple filenames")
     if entry.get("folder"):
         _path(entry["folder"])
+    if "group" in entry:
+        _id(entry["group"])
+    if "group_order" in entry and (type(entry["group_order"]) is not int or entry["group_order"] < 0):
+        raise ValueError("Invalid list member order")
 
 
 def _exported(entries, include_reads):
@@ -371,6 +375,11 @@ def import_zip(source, name="Imported project", check=None, progress=None):
 
         def entry_copy(original, rename_files=True):
             entry = _links(copy.deepcopy(original), ids)
+            group = entry.pop("group", None)
+            if group in ids:
+                entry["group"] = ids[group]
+            else:
+                entry.pop("group_order", None)
             entry["folder"] = folder + ("/" + original["folder"] if original.get("folder") else "")
             if rename_files:
                 for key in library.FILE_FIELDS:

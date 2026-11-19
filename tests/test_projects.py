@@ -53,6 +53,22 @@ def snapshot():
             for p in config.DATA_DIR.rglob("*") if p.is_file()}
 
 
+def test_project_roundtrip_remaps_mixed_list_members(client):
+    source = sequence(client)
+    tree = library.import_text("tree.nwk", "(a:1,b:2);")[0][0]
+    grouped = client.post("/api/library/group", json={"ids": [source, tree], "name": "Results"})
+    assert grouped.status_code == 200, grouped.text
+    group = grouped.json()["id"]
+    preview = upload(client, archive_bytes(client))
+    assert preview.status_code == 200, preview.text
+    response = client.post("/api/project/import", json={"background": False, "token": preview.json()["token"]})
+    assert response.status_code == 200, response.text
+    imported = [library.get_item(i) for i in response.json()["ids"]]
+    imported_group = next(it for it in imported if it["kind"] == "item_list")
+    assert imported_group["id"] != group
+    assert {it["kind"] for it in imported if it.get("group") == imported_group["id"]} == {"sequence", "tree"}
+
+
 def test_project_roundtrip_preserves_links_sidecars_and_history(client, tmp_path):
     source = sequence(client)
     record = library.records(library.get_item(source))[0]

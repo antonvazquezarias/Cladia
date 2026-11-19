@@ -207,7 +207,7 @@ function openItem(id) {
   if (!it) return;
   selected = [id];
   anchorId = id;
-  if (it.parent) expanded.add(it.parent);
+  for (const id of listAncestors(it)) expanded.add(id);
   showSelection();
   renderList();
 }
@@ -1051,6 +1051,7 @@ const exportable = () => selected.map(itemById).filter((it) => it && !it.missing
 function openExport() {
   const chosen = exportable();
   if (!chosen.length) return;
+  if (chosen.some(it => it.kind === "item_list")) return toast("Select the items inside the list to export them", true);
   const form = $("export-dialog").querySelector("form");
   const hasAlignment = chosen.some((it) => it.kind === "alignment");
   const oneAlignment = chosen.length === 1 && chosen[0].kind === "alignment";

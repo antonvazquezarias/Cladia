@@ -256,6 +256,12 @@ items keep their current names; use Rename to change an older suffixed name.
   it again for farthest first). Distance is the proportion of mismatches at
   aligned positions with a known base or amino acid in both sequences; gaps
   and ambiguous sites are ignored. Rows with no comparable positions go last.
+- **Group into a list** also works with alignments, trees, and other library
+  items. A mixed list shows the same breakdown by type as selecting several
+  items. Expand it to open each item in its usual viewer. Dropping another
+  kind of item onto a sequence list puts both into a mixed list. Use **Take
+  out of list** on a member to move it out, or **Ungroup items** to remove the
+  list and return its members to their previous folders.
 - **Right-click** an item in the list for what can be done with the selection:
   *Open in new window*, *Rename*, *Metadata* (one item), *Duplicate*,
   *Group into a list* (several),
@@ -690,7 +696,10 @@ genotype 0.
     NCBI. Switching tabs preserves the query and each tab’s options.
     Online searches NCBI's databases (as the BLAST web page) with the selection
     in the viewer (part of a sequence, or of several rows, or of the consensus),
-    else the whole of each sequence selected in the list (up to 10, one job each).
+    else the whole of each sequence selected in the library (up to 10 queries).
+    Each whole sequence list runs as one job. Its successful results appear in
+    a new list named `<list>_blast`, in source order. The job log names any failed
+    queries. Individually selected queries produce separate result items.
     Programs: megablast (highly similar), discontiguous megablast (more distant),
     blastn, blastx (translated, against proteins; with the sequence's genetic
     code); for proteins blastp and tblastn. Databases: core nucleotide (NCBI's
@@ -701,8 +710,7 @@ genotype 0.
     kind) are searched here with BLAST+, in seconds, with no limit on how many
     queries; *Limit to* doesn't apply to them, and their hits have no organism
     (it's in the description).
-    The results become an item in *BLAST results* (`<query> BLAST`; delete what
-    you don't need). It opens as a table like NCBI's: accession,
+    Each query's result opens as a table (`<query> BLAST`) with accession,
     description, organism, max and total score, query cover, E value, identity,
     length, in NCBI's order or sorted by a column (click its header), with a
     filter (the columns keep their width). Click a hit (or its box) to tick it.
@@ -745,7 +753,9 @@ genotype 0.
     leaves only the ORFs.
     With any method, a whole sequence list is one job with one bar (how many
     sequences are done) and updates the list in place, preserving its sequence order.
-    When creating copies, results use `_mfannot`, `_annotated` or `_orfs` suffixes.
+    When creating copies, including fallback copies, results from a whole list
+    go into a new sequence list with a suffix such as `_mfannot`, `_annotated`
+    or `_orfs`.
     Sequences selected one by one are one job too. MFannot annotates them
     one after another (about 25 s per mitochondrial genome); the quick annotation
     searches them all at once (21 contigs in about 2 s); the ORF finder is immediate.

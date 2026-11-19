@@ -1,5 +1,5 @@
 """Library, folder, trash and action-history routes."""
-from .request_context import IdsRequest, ResultDestination, _action_stack, _clear_actions, _free, _item, _record_action, _record_created, _result_folder
+from .request_context import IdsRequest, ResultDestination, _action_stack, _clear_actions, _free, _item, _item_in, _record_action, _record_created, _result_folder
 import base64
 import os
 import re
@@ -202,6 +202,11 @@ def delete_from_trash(req: TrashRequest):
 def split_list(req: IdsRequest):
     item = _item(req.ids[0])
     _free(item["id"])
+    if item["kind"] == "item_list":
+        with library._writing:
+            ids = [it["id"] for it in library.items() if it.get("group") == item["id"]]
+            remove_items(IdsRequest(ids=[item["id"]]))
+        return {"ids": ids}
     if item["kind"] != "list":
         raise HTTPException(400, f"{item['label']} is not a sequence list")
     with library._writing:
@@ -226,15 +231,25 @@ class GroupRequest(ResultDestination):
 
 @router.post("/api/library/group")
 def group_items(req: GroupRequest):
-    """Sequences moved into one new sequence list."""
+    """Move items into a new list."""
     _free(*req.ids, *{i.rsplit("-", 1)[0] for i in req.ids if "-" in i})
     try:
         with library._writing:
-            ids = [_item(i)["id"] for i in req.ids]
+            all_items = library.item_map()
+            chosen = [_item_in(all_items, i) for i in req.ids]
+            ids = [it["id"] for it in chosen]
+            folder = _result_folder(req, chosen)
+            if library.needs_item_list(chosen):
+                result, _ = library.group_items(chosen, req.name, folder)
+                if any(it["parent"] or it.get("group") for it in chosen):
+                    _clear_actions()
+                else:
+                    _record_created([result])
+                return {"id": result}
             if _action_stack() is None:
-                result = library.group(ids, req.name, folder=_result_folder(req, [_item(i) for i in ids]))
+                result = library.group(ids, req.name, folder=folder)
             else:
-                result = library.group(ids, req.name, remove_source=False, folder=_result_folder(req, [_item(i) for i in ids]))
+                result = library.group(ids, req.name, remove_source=False, folder=folder)
                 try:
                     output = action_delete.capture([result])
                     source = action_delete.perform(ids)
@@ -294,15 +309,26 @@ class AddToListRequest(BaseModel):
 
 @router.post("/api/library/add-to-list")
 def add_to_list(req: AddToListRequest):
-    """Sequences moved into an existing list (dropped on it in the list)."""
-    if _item(req.id)["kind"] != "list":
-        raise HTTPException(400, "Drop sequences on a sequence list")
+    """Items moved into an existing list (dropped on it in the sidebar)."""
     _free(req.id, *req.ids, *{i.rsplit("-", 1)[0] for i in req.ids if "-" in i})
     try:
-        added = library.add_to_group(req.id, [_item(i)["id"] for i in req.ids])
-        if added:
-            _clear_actions()
-        return {"added": added}
+        with library._writing:
+            all_items = library.item_map()
+            target = _item_in(all_items, req.id)
+            if target["kind"] not in ("list", "item_list"):
+                raise ValueError("Drop items on a list")
+            chosen = [_item_in(all_items, i) for i in req.ids]
+            if target["kind"] == "item_list":
+                list_id, added = library.group_items(chosen, target=target)
+            elif library.needs_item_list(chosen):
+                list_id, count = library.group_items([target, *chosen], target["name"], target["folder"])
+                added = count - 1
+            else:
+                list_id = req.id
+                added = library.add_to_group(req.id, [it["id"] for it in chosen])
+            if added:
+                _clear_actions()
+            return {"added": added, **({"id": list_id} if list_id != req.id else {})}
     except ValueError as e:
         raise HTTPException(400, str(e))
 

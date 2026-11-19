@@ -8,6 +8,7 @@ Kinds of item, one file each:
   sequence   one record, GenBank
   list       several records, multi-record GenBank (a "sequence list", as in
              Geneious); each record also shows as a child item "<list id>-<n>"
+  item_list  a list of intact library items, linked by their index entries
   alignment  aligned FASTA (MAFFT output, or an imported alignment)
   tree       Newick (FastTree/IQ-TREE output, or an imported tree)
   mapping    reads mapped to a reference (a job's result, see mapping.py): JSON,
@@ -251,7 +252,16 @@ def move(item_ids, folder):
 def folder_of(item):
     """The folder an item is in (a list member: its list's), or None."""
     item_id = item["parent"] or item["id"]
-    return next((e.get("folder") for e in load() if e["id"] == item_id), None)
+    return _item_location({e["id"]: e for e in load()}, item_id)
+
+
+def _item_location(entries, item_id):
+    entry = entries.get(item_id, {})
+    seen = {item_id}
+    while (group := entry.get("group")) and group not in seen and entries.get(group, {}).get("kind") == "item_list":
+        seen.add(group)
+        entry = entries[group]
+    return entry.get("folder")
 
 
 class DestinationError(ValueError):
@@ -269,8 +279,8 @@ def result_folder(items, folder=DEFAULT_FOLDER):
             raise DestinationError("The result folder no longer exists. Choose a destination again.")
         return folder
     owners = {item.get("parent") or item["id"] for item in items}
-    locations = {entry["id"]: entry.get("folder") for entry in load() if entry["id"] in owners}
-    places = {locations.get(owner) for owner in owners}
+    entries = {entry["id"]: entry for entry in load()}
+    places = {_item_location(entries, owner) for owner in owners}
     if len(places) > 1:
         raise DestinationError("The inputs are in different folders. Choose where to save the result.")
     return next(iter(places), None)
@@ -421,7 +431,11 @@ def _splice(path, replacements):
 def items():
     """Everything in the list. A sequence list also yields one child item per record."""
     result = []
-    for entry in load():
+    entries = {entry["id"]: entry for entry in load()}
+    groups = {entry["id"] for entry in entries.values() if entry["kind"] == "item_list"
+              and (library_dir() / entry["file"]).is_file()}
+    group_counts = Counter(e.get("group") for e in entries.values())
+    for entry in entries.values():
         path = library_dir() / entry["file"]
         variants_path = library_dir() / entry["variants"] if entry.get("variants") else None
         changed = max(path.stat().st_mtime if path.exists() else 0,
@@ -449,7 +463,7 @@ def items():
                 "link_note": entry.get("link_note"),  # variants: why it has no reference, or what else the file holds
                 "read_files": entry.get("read_files"),  # reads: the FASTQ files beside the report
                 "reads_removed": entry.get("reads_removed"),  # reads: files deleted, the report kept
-                "folder": entry.get("folder"),    # list members: their list's (copied below)
+                "folder": _item_location(entries, entry["id"]),
                 "sorted": entry.get("sorted"),    # lists, alignments: the last Sort ({key, descending})
                 "original": entry.get("original"),  # imports: the file it was copied from ({path, format})
                 "provenance": entry.get("provenance")}
@@ -463,6 +477,8 @@ def items():
                             length=metas[0]["length"])  # (the viewer shows as many as fit its budget)
         if entry["kind"] == "alignment" and not item["missing"]:  # the list's filter also finds its rows
             item["search"] = "\n".join(f"{m['name']} {m['description']} {m['organism']}" for m in record_meta(path))
+        if entry["kind"] == "item_list":
+            item["count"] = group_counts[entry["id"]]
         if entry["kind"] == "list" and not item["missing"]:
             item["count"] = len(metas)
             item["protein"] = bool(metas) and metas[0]["unit"] == "aa"
@@ -472,6 +488,10 @@ def items():
                                "description": m["description"], "organism": m["organism"], "features": m["features"],
                                "accession": m["accession"],
                                "protein": m["unit"] == "aa", "length": m["length"]})
+        if entry.get("group") in groups:
+            item["group"] = entry["group"]
+            if "group_order" in entry:
+                item["group_order"] = entry["group_order"]
         result.append(item)
     counts = Counter((it["source"], it["source_record"]) for it in result if it["kind"] == "figure")
     labels = {}
@@ -501,7 +521,7 @@ def version(found=None):
     found = items() if found is None else found
     digest = hashlib.sha1()
     keys = ("id", "label", "kind", "parent", "record", "path", "mtime", "count", "description",
-            "organism", "folder", "missing", "features", "length", "protein", "sorted", "search", "reads_mode", "tracks", "reads_removed")
+            "organism", "folder", "group", "group_order", "missing", "features", "length", "protein", "sorted", "search", "reads_mode", "tracks", "reads_removed")
     for item in found:
         digest.update("\0".join(str(item.get(key, "")) for key in keys).encode("utf-8", "replace"))
         digest.update(b"\n")
@@ -1545,6 +1565,8 @@ def info(item):
         return {"kind": kind, "missing": True}
     if kind == "sequence":
         return {"kind": kind, **item_meta(item)}
+    if kind == "item_list":
+        return {"kind": kind, "count": item["count"]}
     if kind == "list":
         metas = record_meta(Path(item["path"]))
         lengths = [m["length"] for m in metas]
@@ -1628,6 +1650,8 @@ def duplicate(item):
     """A copy of an item, named "<name> copy". A sequence of a list becomes a
     sequence of its own."""
     name = f"{item['name']} copy"
+    if item["kind"] == "item_list":
+        raise ValueError("Select the items inside the list to duplicate them")
     if item["kind"] == "reads":
         raise ValueError("Reads aren't duplicated (their files are large): import them again if you need a second copy")
     if item["parent"]:
@@ -2203,7 +2227,7 @@ def check_file_content(entry, folder):
     elif kind == "variants":
         if not path.read_text(encoding="utf-8").startswith("##fileformat=VCF"):
             raise ValueError("Not a VCF file")
-    elif kind in ("mapping", "comparison", "blast", "primers", "figure", "reads"):
+    elif kind in ("mapping", "comparison", "blast", "primers", "figure", "reads", "item_list"):
         if not isinstance(json.loads(path.read_text(encoding="utf-8")), dict):
             raise ValueError("Expected a JSON object")
     for key in ("figure", "trace", "hits", "tracks"):
@@ -2442,14 +2466,72 @@ def _record_bytes(item):
     return data if data.endswith(b"\n") else data + b"\n"
 
 
+def needs_item_list(chosen):
+    return any(it["kind"] not in ("sequence", "list") for it in chosen)
+
+
+@writes
+def group_items(chosen, name="", folder=DEFAULT_FOLDER, target=None, *, allow_single=False):
+    """Group intact items by ID. A selected GenBank record first becomes its own item."""
+    chosen = {it["id"]: it for it in chosen}
+    chosen = [it for it in chosen.values() if it["parent"] not in chosen]
+    entries = {e["id"]: e for e in load()}
+    if target:
+        ancestors = {target["id"]}
+        owner = target.get("group")
+        while owner in entries and owner not in ancestors:
+            ancestors.add(owner)
+            owner = entries[owner].get("group")
+        if any(it["id"] in ancestors for it in chosen):
+            raise ValueError("A list can't be moved into itself or one of its members")
+        chosen = [it for it in chosen if it.get("group") != target["id"]]
+        if not chosen:
+            return target["id"], 0
+    elif len(chosen) < (1 if allow_single else 2):
+        raise ValueError("A list needs at least two items")
+    if any(it["missing"] for it in chosen):
+        raise ValueError("A file is missing from the library")
+    destination = result_folder(chosen, folder) if not target else None
+    records = [it["id"] for it in chosen if it["parent"]]
+    extracted = {}
+    if records:
+        extracted = dict(zip(records, take_out(records), strict=True))
+        entries = {e["id"]: e for e in load()}
+    members = [extracted.get(it["id"], it["id"]) for it in chosen]
+    if target:
+        group_id = target["id"]
+        path = None
+    else:
+        group_id = uuid.uuid4().hex[:12]
+        path = unique_path(library_dir() / f"{safe_name(name)}.items.json")
+        path.write_text("{}", encoding="utf-8")
+        entry = {"id": group_id, "kind": "item_list", "file": path.name,
+                 "name": name.strip() or "New list"}
+        if destination:
+            entry["folder"] = destination
+        entries[group_id] = entry
+    first = max((e.get("group_order", -1) for e in entries.values() if e.get("group") == group_id), default=-1) + 1
+    for index, item_id in enumerate(members, start=first):
+        entries[item_id]["group"] = group_id
+        entries[item_id]["group_order"] = index
+    try:
+        _save(list(entries.values()))
+    except OSError:
+        if path:
+            path.unlink(missing_ok=True)
+        raise
+    return group_id, len(members)
+
+
 @writes
 def group(item_ids, name, remove_source=True, folder=DEFAULT_FOLDER):
     """Sequences (and lists: all their sequences) moved into one new sequence list,
     as if imported from one file; returns its id. The records are copied as they
     are (byte ranges), then the items they came from are removed."""
-    chosen = [get_item(i) for i in item_ids]
-    if any(it["kind"] not in ("sequence", "list") for it in chosen):
-        raise ValueError("only sequences and sequence lists can be grouped")
+    all_items = item_map()
+    chosen = [all_items[i] for i in item_ids]
+    if needs_item_list(chosen):
+        return group_items(chosen, name, folder)[0]
     _no_reads(chosen)
     destination = result_folder(chosen, folder)
     members = []
@@ -2499,16 +2581,35 @@ def take_out(item_ids, folder=DEFAULT_FOLDER):
     """List members taken out of their lists: each a sequence of its own (its
     record's bytes as they are), beside their source lists unless `folder` is
     explicit (None means Library root). A list left empty goes. Returns new ids."""
-    members = [it for it in (get_item(i) for i in item_ids) if it["parent"]]
+    all_items = item_map()
+    members = [it for it in (all_items[i] for i in item_ids) if it["parent"] or it.get("group")]
     if folder is not DEFAULT_FOLDER:
         folder = result_folder([], folder)
     new = []
+    extracted_records = []
+    detached = {}
     for m in members:
+        destination = folder_of(m) if folder is DEFAULT_FOLDER else folder
+        if m.get("group") and not m["parent"]:
+            detached[m["id"]] = destination
+            new.append(m["id"])
+            continue
         target = unique_path(library_dir() / f"{safe_name(m['name'])}.gb")
         target.write_bytes(_record_bytes(m))
-        destination = folder_of(m) if folder is DEFAULT_FOLDER else folder
         new.append(_register(target, "sequence", {"name": m["name"], **({"folder": destination} if destination else {})}))
-    remove([m["id"] for m in members])
+        extracted_records.append(m["id"])
+    if extracted_records:
+        remove(extracted_records)
+    if detached:
+        entries = load()
+        for entry in entries:
+            if entry["id"] in detached:
+                entry.pop("group", None)
+                entry.pop("group_order", None)
+                entry.pop("folder", None)
+                if destination := detached[entry["id"]]:
+                    entry["folder"] = destination
+        _save(entries)
     return new
 
 

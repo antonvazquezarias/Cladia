@@ -5,7 +5,7 @@ from pathlib import Path
 from Bio.Data import CodonTable
 from .item_inputs import InputError, _item_in
 
-from . import blastdb, graph, jobs, library, mapping, primers, reads, sanger
+from . import blastdb, graph, job_outputs, jobs, library, mapping, primers, reads, sanger
 from .genbank import looks_protein
 
 
@@ -135,6 +135,31 @@ def submit_primers(req, resolved, items, engine, options, busy):
                         items=items, output=req.output, forward=forward, reverse=reverse, **options)]
 
 
+def _run_blast_list(job, workdir, runner, operation, items, output, queries, list_name, search_options):
+    failures = 0
+    try:
+        for index, (item, query) in enumerate(zip(items, queries, strict=True), start=1):
+            if job.get("cancel"):
+                raise RuntimeError("cancelled")
+            query_dir = workdir / str(index)
+            query_dir.mkdir()
+            job["log"] += f"\nQuery {index}/{len(queries)}: {query['name']}\n"
+            try:
+                runner(job, query_dir, operation=operation, items=[item], output=output,
+                       query=query, **search_options)
+            except Exception as exc:
+                if job.get("cancel"):
+                    raise
+                failures += 1
+                job["log"] += f"{query['name']} failed: {exc}\n"
+    finally:
+        job_outputs.group_results(job, list_name)
+    if not job["outputs"]:
+        raise RuntimeError("No query finished successfully (see the log)")
+    if failures:
+        job["warning"] = f"{failures} of {len(queries)} BLAST queries failed (see the log)."
+
+
 def submit_blast(req, resolved, items, engine, options, busy):
     program, database = options["program"], options["database"]
     if program not in blast_support.BLAST_PROGRAMS:
@@ -154,7 +179,14 @@ def submit_blast(req, resolved, items, engine, options, busy):
         raise InputError(400, "At most 10 queries at a time at NCBI")
     by_id = library.item_map()
     graphs = {}
-    submitted = []
+    groups, prepared = {}, []
+    query_lists = resolved.get("query_lists", {})
+    search_options = {"program": program, "max_hits": min(max(options["max_hits"], 1), 500),
+                      "code": req.context.get("code", 1)}
+    if local:
+        search_options["db"] = db
+    else:
+        search_options.update(database=database, entrez=options.get("entrez", "").strip())
     for entry in queries:
         query_spec = {"item": entry} if isinstance(entry, str) else entry
         item = _item_in(by_id, query_spec["item"])
@@ -181,15 +213,33 @@ def submit_blast(req, resolved, items, engine, options, busy):
                                      f"{program} needs {'DNA' if protein else 'a protein'}")
         query = {"name": name, "sequence": sequence, "item": item["id"],
                  "start": query_spec.get("start") or 1, "end": query_spec.get("end") or len(sequence)}
-        params = {"query": query, "program": program, "max_hits": min(max(options["max_hits"], 1), 500),
-                  "code": req.context.get("code", 1)}
-        if local: params["db"] = db
-        else: params.update(database=database, entrez=options.get("entrez", "").strip())
-        kind = "localblast" if local else "blast"
-        submitted.append(jobs.submit(kind, f"BLAST {name} ({program}, {db['name'] if local else database})",
-                                     engine["run"], folder=library.folder_of(item),
-                                     resources=(engine["lane"], engine["cores"]), operation=req.operation,
-                                     items=[item], output=req.output, **params))
+        list_id = query_lists.get(entry) if isinstance(entry, str) else None
+        if list_id:
+            if list_id not in groups:
+                groups[list_id] = []
+                prepared.append((by_id[list_id], groups[list_id]))
+            groups[list_id].append((item, query))
+        else:
+            prepared.append((item, [(item, query)]))
+
+    submitted = []
+    kind = "localblast" if local else "blast"
+    database_label = db["name"] if local else database
+    for source, batch in prepared:
+        members, specs = map(list, zip(*batch))
+        if source["kind"] == "list":
+            runner = _run_blast_list
+            label = f"{source['label']} ({len(specs)} queries)"
+            params = {"runner": engine["run"], "queries": specs,
+                      "list_name": f"{source['name']}_blast", "search_options": search_options}
+        else:
+            runner = engine["run"]
+            label = specs[0]["name"]
+            params = {"query": specs[0], **search_options}
+        submitted.append(jobs.submit(kind, f"BLAST {label} ({program}, {database_label})",
+                                     runner, folder=library.folder_of(source), operation=req.operation,
+                                     resources=(engine["lane"], engine["cores"]),
+                                     items=members, output=req.output, **params))
     return submitted
 
 

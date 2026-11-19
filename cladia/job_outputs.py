@@ -25,6 +25,7 @@ def annotated(job, workdir, results, suffix, into, apply=False, busy=None):
         groups = {}
         for item, path in results:
             groups.setdefault(item["path"], []).append((item, path))
+        copies = []
         for group in groups.values():
             if job.get("cancel"):
                 raise RuntimeError("cancelled")
@@ -37,8 +38,12 @@ def annotated(job, workdir, results, suffix, into, apply=False, busy=None):
                 job["log"] += ("Saved as a copy instead of updating the sequence: it changed or is being edited, or the "
                                "result's sequence differs (e.g. the annotation program rotated a circular genome).\n")
                 job["warning"] = "Some annotations could not be safely applied and were saved as copies; see the job log."
-                for item, path in group:
-                    add_output(job, path, f"{library.safe_name(item['name'])}{suffix}", source=item)
+                if into:
+                    copies.extend(group)
+                else:
+                    annotated(job, workdir, group, suffix, into=None)
+        if copies:
+            annotated(job, workdir, copies, suffix, into)
         return
     if not into:
         for item, path in results:
@@ -54,6 +59,20 @@ def annotated(job, workdir, results, suffix, into, apply=False, busy=None):
         records.append(record)
     write_record(records, workdir / "list.gb")
     add_output(job, workdir / "list.gb", into, kind="list", extra={"name": into})
+
+
+def group_results(job, name):
+    """Publish one list link for a batch, retaining the members' job provenance."""
+    outputs = job["outputs"]
+    if not outputs:
+        return
+    with library._writing:
+        by_id = library.item_map()
+        members = [by_id[output["id"]] for output in outputs]
+        group, _ = library.group_items(members, name, job.get("folder"), allow_single=True)
+        job["_grouped_outputs"] = outputs
+        job["outputs"] = [{"id": group, "label": name, "kind": "item_list"}]
+
 
 def add_output(job, path, name, kind=None, extra=None, source=None):
     """Copies a result file into the library and links it from the job."""

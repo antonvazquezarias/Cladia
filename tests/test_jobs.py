@@ -191,6 +191,22 @@ def test_annotation_refuses_unexpected_base_changes(setup, tmp_path):
     assert Path(item["path"]).read_bytes() == before
 
 
+def test_annotation_fallback_copies_keep_the_sequence_list(setup, tmp_path):
+    files, _ = setup
+    (source,), _ = library.import_paths([files / "set.fasta"])
+    members = library.children(library.get_item(source))
+    library.annotation_baselines(members)
+    before = Path(members[0]["path"]).read_bytes()
+    job = {"log": "", "outputs": []}
+    owner_orfs.run_annotation(job, tmp_path, members, min_codons=1, into="set_orfs",
+                              apply=True, busy=lambda ids: True)
+    (output,) = job["outputs"]
+    assert output["kind"] == "list" and output["id"] != source
+    assert [it["name"] for it in library.children(library.get_item(output["id"]))] == [it["name"] for it in members]
+    assert Path(members[0]["path"]).read_bytes() == before
+    assert job["warning"]
+
+
 def test_orfs_on_a_list(setup):
     files, _ = setup
     (lst,) = library.import_paths([files / "set.fasta"])[0]
@@ -596,6 +612,49 @@ def test_blast_query_names(setup, monkeypatch):
         "inputs": {"queries": queries}})
     name = library.get_item(item)["name"]
     assert titles == [f"{name} 11-20", name]
+
+
+@pytest.mark.parametrize("failed", [set(), {"alpha"}, {"alpha", "zulu"}])
+def test_blast_list_groups_successful_outputs(setup, monkeypatch, failed):
+    from cladia.server import app
+    from cladia.tool_registry import build_registry
+    library.add_folder("Study")
+    (source,), _ = library.import_text("Queries.fa", ">zulu\nACGTACGT\n>alpha\nACGTTCGT\n", "Study")
+    (loose,), _ = library.import_text("loose.fa", ">loose\nACGTACGT\n", "Study")
+
+    def search(job, workdir, query, **options):
+        if query["name"] in failed:
+            raise RuntimeError("mock search failure")
+        result = library.add_blast({"query": {"item": query["item"]}, "hits": []}, f"{query['name']} BLAST")
+        job["outputs"].append({"id": result, "label": f"{query['name']} BLAST", "kind": "blast"})
+
+    engine = build_registry().engines["ncbi_blast"]
+    monkeypatch.setitem(engine["run"].__globals__, "run_search", search)
+    client = TestClient(app)
+    response = client.post("/api/tool-registry/run", json={"operation": "blast.search", "engine": "ncbi_blast",
+                                                           "inputs": {"queries": [source, loose]}})
+    assert response.status_code == 200, response.text
+    batch, single = [jobs.JOBS[j["id"]] for j in response.json()]
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and any(j["status"] in ("queued", "running") for j in (batch, single)):
+        time.sleep(0.01)
+    assert single["status"] == "done"
+    (loose_result,) = single["outputs"]
+    assert "group" not in library.get_item(loose_result["id"])
+    assert all(f"{name} failed: mock search failure" in batch["log"] for name in failed)
+    expected = [f"{name} BLAST" for name in ("zulu", "alpha") if name not in failed]
+    if not expected:
+        assert batch["status"] == "failed" and not batch["outputs"]
+        assert all(it["kind"] != "item_list" for it in library.items())
+        return
+    assert batch["status"] == "done"
+    (output,) = batch["outputs"]
+    assert (output["kind"], output["label"]) == ("item_list", "Queries_blast")
+    group = library.get_item(output["id"])
+    members = sorted((it for it in library.items() if it.get("group") == group["id"]), key=lambda it: it["group_order"])
+    assert [it["label"] for it in members] == expected
+    assert all(it["folder"] == "Study" and it["provenance"]["job_id"] == batch["id"] for it in [group, *members])
+    assert bool(batch.get("warning")) == bool(failed)
 
 
 def test_remove_annotations_and_replace(setup):
