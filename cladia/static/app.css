@@ -15,6 +15,7 @@ body {
   display: flex;
   font: 13px/1.4 "Segoe UI", system-ui, sans-serif;
   color: var(--text);
+  background: white;  /* a browser in dark mode would otherwise paint the empty main area black */
   overflow: hidden;
 }
 
@@ -215,7 +216,7 @@ section.grow { flex: 1; overflow-y: auto; outline: none; }
 }
 #hover-card .title { font-weight: 600; font-size: 13px; }
 #hover-card .organism { font-style: italic; }
-#hover-card .path { word-break: break-all; }
+#hover-card .path { overflow-wrap: break-word; }  /* app.js marks breaks after \ and / */
 #hover-card .muted { color: var(--muted); }
 
 /* Right-click menu */
@@ -244,6 +245,14 @@ ul { list-style: none; margin: 0; padding: 0; }
 .file-list li .name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .file-list li small { flex: none; margin-left: 4px; }
 .file-list li .twisty { flex: none; }
+/* Row details (app.js rowDetails): the organism takes only the room the name
+   leaves (basis 0), then a read tag, a circular ring and the size, at the right */
+.file-list li .org { flex: 1 1 0; min-width: 0; margin-left: 6px; overflow: hidden; text-overflow: ellipsis;
+  font-style: italic; font-weight: normal; color: var(--muted); font-size: 12px; }
+.file-list li .size, .file-list li .tag, .file-list li .ring { flex: none; margin-left: 6px; color: var(--muted);
+  font-weight: normal; font-size: 11px; font-variant-numeric: tabular-nums; }
+.file-list li .tag { padding: 0 4px; border: 1px solid var(--border); border-radius: 3px; line-height: 14px; }
+.file-list li .ring { width: 6px; height: 6px; border: 1.5px solid var(--muted); border-radius: 50%; align-self: center; }
 .file-list li.empty { display: block; white-space: normal; cursor: default; }
 .file-list li:hover { background: #e8eaee; }
 .file-list li.selected { background: var(--accent-soft); font-weight: 600; }

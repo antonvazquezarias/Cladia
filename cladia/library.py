@@ -474,7 +474,8 @@ def items():
                             accession=metas[0]["accession"],
                             features=metas[0]["features"],  # how many (the Annotate dialog asks about them)
                             protein=metas[0]["unit"] == "aa",  # (Align hides DNA-only options)
-                            length=metas[0]["length"])  # (the viewer shows as many as fit its budget)
+                            length=metas[0]["length"],  # (the viewer shows as many as fit its budget)
+                            circular=metas[0]["circular"])  # (the list marks circular sequences)
         if entry["kind"] == "alignment" and not item["missing"]:  # the list's filter also finds its rows
             item["search"] = "\n".join(f"{m['name']} {m['description']} {m['organism']}" for m in record_meta(path))
         if entry["kind"] == "item_list":
@@ -487,7 +488,7 @@ def items():
                                "label": f"{entry['name']} › {m['name']}", "record": i, "parent": entry["id"],
                                "description": m["description"], "organism": m["organism"], "features": m["features"],
                                "accession": m["accession"],
-                               "protein": m["unit"] == "aa", "length": m["length"]})
+                               "protein": m["unit"] == "aa", "length": m["length"], "circular": m["circular"]})
         if entry.get("group") in groups:
             item["group"] = entry["group"]
             if "group_order" in entry:

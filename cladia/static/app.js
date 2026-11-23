@@ -192,12 +192,14 @@ function renderList() {
         line.append(renameInput(it));
       } else {
         line.append(rowName(it.parent ? it.name : it.label));
+        if (!it.missing) line.append(...rowDetails(it));
       }
       if (fresh.items.includes(it.id) && !it.missing && renaming !== it.id) {
         line.append(Object.assign(document.createElement("span"), { className: "badge", textContent: "new" }));
       }
-      if (showDescriptions && it.description && renaming !== it.id) {  // under the name, on its own line
-        li.append(Object.assign(document.createElement("span"), { className: "sub", textContent: it.description }));
+      const description = rowDescription(it);
+      if (showDescriptions && description && renaming !== it.id) {  // under the name, on its own line
+        li.append(Object.assign(document.createElement("span"), { className: "sub", textContent: description }));
       }
       if (it.missing) li.title = `Cladia's copy is gone: ${it.path}`;  // (others: the hover card, not a second tooltip)
       const depth = listAncestors(it).length;
@@ -266,8 +268,38 @@ function rowName(text) {
   return Object.assign(document.createElement("span"), { className: "name", textContent: text });
 }
 
+// ── Row details (23 Nov 2026): what a sequence row says besides its name ──
+// The organism (italic, only in the room the name leaves), then at the right
+// a "read" tag for Sanger reads, a ring for circular sequences and the size
+// ("aa" marks a protein). To go back to name-only rows, drop the rowDetails
+// call in renderList and the .org/.size/.tag/.ring rules in app.css.
+function rowDetails(it) {
+  if (it.kind !== "sequence" || it.length == null) return [];
+  const span = (className, textContent = "") => Object.assign(document.createElement("span"), { className, textContent });
+  const parts = [];
+  parts.push(span("org", it.organism || ""));  // empty, it still pushes the size to the right
+  if (it.trace) parts.push(span("tag", "read"));
+  if (it.circular) parts.push(span("ring"));
+  parts.push(span("size", sizeText(it.length, it.protein)));
+  return parts;
+}
+
+// 679 bp, 1,207 bp (exact for genes and barcodes), 15.8 kb, 152 kb, 1.2 Mb; proteins in aa
+function sizeText(n, protein) {
+  if (protein) return `${n.toLocaleString()} aa`;
+  if (n < 10000) return `${n.toLocaleString()} bp`;
+  if (n < 1e6) return `${n < 1e5 ? (n / 1e3).toFixed(1) : Math.round(n / 1e3)} kb`;
+  return `${(n / 1e6).toFixed(1)} Mb`;
+}
+
+// The description line, without the organism it starts with when the row already shows it
+function rowDescription(it) {
+  const d = it.description || "";
+  return it.organism && d.toLowerCase().startsWith(it.organism.toLowerCase()) ? d.slice(it.organism.length).replace(/^[\s,;:.-]+/, "") : d;
+}
+
 // ── The sidebar's width: drag its right edge (remembered) ────────────────
-const SIDEBAR = { min: 200, max: 600 };
+const SIDEBAR = { min: 230, max: 600 };  // (at 200 px "Download…" was cut)
 
 function setSidebarWidth(px) {
   const width = Math.round(Math.min(SIDEBAR.max, Math.max(SIDEBAR.min, px)));
@@ -1544,7 +1576,8 @@ async function showCard(li, it) {
     : "";
   line(it.parent ? it.name : it.label, "title");
   if (it.folder !== (currentFolder || undefined) && it.folder) line(`📁 ${it.folder}`, "muted");
-  if (it.original && !it.parent) line(`From ${it.original.path}`, "muted path");
+  // break long paths after their separators, not inside folder names
+  if (it.original && !it.parent) line(`From ${it.original.path.replace(/([\\/])/g, "$1​")}`, "muted path");
   if (info.kind === "sequence") {
     line(info.organism, "organism");
     line(info.description);

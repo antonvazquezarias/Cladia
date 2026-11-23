@@ -323,8 +323,12 @@ items keep their current names; use Rename to change an older suffixed name.
   is editing it. The same Save button saves pending sequence and metadata edits
   together; the toolbar's undo and redo follow the active view. Taxonomy, other source qualifiers and references are shown as
   recorded. The name is still changed with Rename.
+- **What a sequence row shows**: its name, then its organism in italics (in the
+  room the name leaves), and at the right a *read* tag for Sanger reads, a small
+  ring for circular sequences and the length (bp, kb or Mb; *aa* for proteins).
 - **Descriptions** (the button next to the filter, remembered): each sequence's
-  description under its name, small and grey. A FASTA header's `[Organism]` goes
+  description under its name, small and grey, without the organism it starts
+  with when the row already shows it. A FASTA header's `[Organism]` goes
   to the organism, not the description.
 - **The list's width**: drag the sidebar's right edge (remembered; double-click it
   for the usual width). Long names end in "…"; a list's count and the *new* badge
