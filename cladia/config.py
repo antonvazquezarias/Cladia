@@ -64,7 +64,15 @@ TOOLS_IMAGE = os.environ.get("CLADIA_TOOLS_IMAGE", f"cladia-tools:{TOOLS_VERSION
 
 # ── The user's settings (the Settings dialog) ───────────────────────────
 TREE_LAYOUT_DEFAULTS = dict(align=False, support=True, lengths=False, ladderize=False)
-LIBRARY_VIEW_DEFAULTS = {"folder": None, "expanded": []}
+LIBRARY_VIEW_DEFAULTS = {"folder": None, "expanded": [], "sorts": {}}
+LIBRARY_SORT_KEYS = ("added", "name", "modified", "size", "organism")  # Sort ▾ beside the list's filter
+
+
+def library_sorts(sorts):
+    """Each folder's row order ("" = the library's top): {path: {key, descending}}, bad entries left out."""
+    return {path: {"key": s["key"], "descending": s.get("descending") is True}
+            for path, s in (sorts.items() if isinstance(sorts, dict) else [])
+            if isinstance(path, str) and isinstance(s, dict) and s.get("key") in LIBRARY_SORT_KEYS}
 _SETTINGS_LOCK = threading.RLock()
 
 SETTINGS = {
@@ -100,6 +108,7 @@ def settings():
             "folder": view.get("folder") if isinstance(view.get("folder"), str) else None,
             "expanded": list(dict.fromkeys(p for p in view.get("expanded", []) if isinstance(p, str)))
             if isinstance(view.get("expanded", []), list) else [],
+            "sorts": library_sorts(view.get("sorts")),
         }
     return result
 

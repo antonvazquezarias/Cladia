@@ -21,6 +21,8 @@ async function loadLibraryView() {
       currentFolder = saved.folder;
       openBranches.clear();
       for (const path of saved.expanded) openBranches.add(path);
+      folderSorts = saved.sorts || {};
+      $("library-sort").title = librarySortTitle();
     } else if (await saveLibraryView()) {  // migrate browser preferences once, then forget them
       try { localStorage.removeItem("cladia.folder"); localStorage.removeItem("cladia.openFolders"); } catch (e) {}
     }
@@ -31,7 +33,7 @@ async function loadLibraryView() {
 // storage is per port, and the port changes at every start); resolves to whether it saved
 function saveLibraryView() {
   libraryViewChanged = true;
-  const view = {folder: currentFolder, expanded: [...openBranches]};
+  const view = {folder: currentFolder, expanded: [...openBranches], sorts: folderSorts};
   libraryViewSave = libraryViewSave.then(() => api("PUT", "/api/settings", {library_view: view}))
     .then(() => true, e => { toast(`Could not save folder preferences: ${e.message}`, true); return false; });
   return libraryViewSave;
@@ -45,6 +47,7 @@ function pruneFolderState() {
   }
   const valid = new Set(folders);
   for (const path of openBranches) if (!valid.has(path)) { openBranches.delete(path); changed = true; }
+  for (const path of Object.keys(folderSorts)) if (path && !valid.has(path)) { delete folderSorts[path]; changed = true; }
   if (changed) saveLibraryView();
 }
 
@@ -53,6 +56,14 @@ function remapFolderState(old, replacement) {
   const expanded = [...openBranches].map(path => remapFolderPath(path, old, replacement)).filter(Boolean);
   openBranches.clear();
   for (const path of expanded) openBranches.add(path);
+  // each folder's sort follows it; a deleted folder's goes (its parent, where its items move, keeps its own)
+  const sorts = {};
+  for (const [path, sort] of Object.entries(folderSorts)) {
+    const moved = path ? remapFolderPath(path, old, replacement) : "";
+    if (moved === null || (path === old && replacement === parentOf(old))) continue;  // deleted
+    sorts[moved] = sort;
+  }
+  folderSorts = sorts;
   saveLibraryView();
 }
 
@@ -67,6 +78,7 @@ function setFolder(path, render = true) {
   }
   saveLibraryView();
   renderFolderButton();
+  $("library-sort").title = librarySortTitle();
   if (render) { renderList(); scheduleToolStates(); }
 }
 

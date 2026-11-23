@@ -331,7 +331,9 @@ items keep their current names; use Rename to change an older suffixed name.
   mapping's mean depth and coverage, a comparison's genomes and blocks, BLAST
   hits, primer pairs or PCR products, reads, variant sites, and what a figure
   shows.
-- **Sort ▾** (next to the filter, remembered) orders the rows inside each section:
+- **Sort ▾** (next to the filter) orders the rows inside each section of the folder
+  shown; each folder keeps its own order, and the menu offers only the orders that
+  apply to what the folder holds:
   order added (the default), name (`k141_2` before `k141_10`), last modified,
   size (the number the row shows: length, tips, hits...) or organism (sections
   without organisms go by name). Choosing the ticked order again reverses it.

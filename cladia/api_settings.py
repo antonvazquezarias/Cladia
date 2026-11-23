@@ -61,11 +61,13 @@ def put_settings(changes: dict):
     changes.pop("blast_databases", None)  # changed only through /api/blastdbs
     if "library_view" in changes:
         view = changes["library_view"]
-        if (not isinstance(view, dict) or set(view) - {"folder", "expanded"} or
+        if (not isinstance(view, dict) or set(view) - {"folder", "expanded", "sorts"} or
+                ("sorts" in view and (not isinstance(view["sorts"], dict) or
+                                      config.library_sorts(view["sorts"]) != view["sorts"])) or
                 ("folder" in view and view["folder"] is not None and not isinstance(view["folder"], str)) or
                 ("expanded" in view and (not isinstance(view["expanded"], list) or
                                         any(not isinstance(p, str) for p in view["expanded"])))):
-            raise HTTPException(400, "Library view needs a folder path and a list of expanded paths")
+            raise HTTPException(400, "Library view needs a folder path, a list of expanded paths and each folder's sort")
     if "tree_layout" in changes:
         layout = changes["tree_layout"]
         if (not isinstance(layout, dict) or

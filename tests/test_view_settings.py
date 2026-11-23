@@ -97,13 +97,18 @@ def test_library_view_merges_and_does_not_reapply_window_settings(tmp_path, monk
     client = TestClient(app)
     assert client.put("/api/settings", json={"library_view": {"folder": "Parent/Child"}}).status_code == 200
     assert client.put("/api/settings", json={"library_view": {"expanded": ["Parent"]}}).status_code == 200
-    assert client.get("/api/settings").json()["library_view"] == {"folder": "Parent/Child", "expanded": ["Parent"]}
+    sorts = {"": {"key": "name", "descending": False}, "Parent": {"key": "size", "descending": True}}
+    assert client.put("/api/settings", json={"library_view": {"sorts": sorts}}).status_code == 200
+    assert client.get("/api/settings").json()["library_view"] == {"folder": "Parent/Child", "expanded": ["Parent"],
+                                                                  "sorts": sorts}
     assert calls == []
     client.put("/api/settings", json={"text_size": 110})
     assert calls == [True]
 
 
-@pytest.mark.parametrize("view", [None, [], {"folder": 7}, {"expanded": "Parent"}, {"expanded": [None]}, {"bad": True}])
+@pytest.mark.parametrize("view", [None, [], {"folder": 7}, {"expanded": "Parent"}, {"expanded": [None]}, {"bad": True},
+                                  {"sorts": []}, {"sorts": {"A": {"key": "colour", "descending": False}}},
+                                  {"sorts": {"A": {"key": "name"}}}])
 def test_invalid_library_view_rejected_without_saving(tmp_path, monkeypatch, view):
     monkeypatch.setattr(config, "APP_DIR", tmp_path)
     response = TestClient(app).put("/api/settings", json={"library_view": view})

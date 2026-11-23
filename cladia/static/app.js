@@ -153,10 +153,12 @@ function visibleRows(name) {
   return rows;
 }
 
-// ── The rows' order in each section (Sort ▾ beside the filter; remembered) ──
+// ── The rows' order in each section (Sort ▾ beside the filter) ──────────
 // The sections by kind stay; within each, its top-level rows follow the order
-// chosen. A list's own sequences keep the file's order (the viewer's Sort ▾,
-// which tools and Export follow): this only arranges the sidebar.
+// chosen for the folder shown (each folder its own, saved with the folder view
+// in the settings: browser storage is lost when the port changes). A list's own
+// sequences keep the file's order (the viewer's Sort ▾, which tools and Export
+// follow): this only arranges the sidebar.
 const LIBRARY_SORTS = [  // key, title, [ascending, descending], the first way descending
   ["added", "Order added", ["oldest first", "newest first"], false],
   ["name", "Name", ["A to Z", "Z to A"], false],
@@ -164,8 +166,8 @@ const LIBRARY_SORTS = [  // key, title, [ascending, descending], the first way d
   ["size", "Size", ["smallest first", "largest first"], true],
   ["organism", "Organism", ["A to Z", "Z to A"], false],
 ];
-const librarySort = { key: "added", descending: false };
-try { Object.assign(librarySort, JSON.parse(localStorage.getItem("cladia.librarySort")) || {}); } catch (e) {}
+let folderSorts = {};  // {folder path ("" = the library's top): {key, descending}}
+const librarySort = () => folderSorts[currentFolder ?? ""] || { key: "added", descending: false };
 const naturally = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });  // k141_2 before k141_10
 
 // The number each row shows: bp, tips, hits... (so Size means something in every section)
@@ -177,8 +179,8 @@ function rowSize(it) {
 }
 
 function sortRows(rows) {
-  const { descending } = librarySort;
-  let key = librarySort.key;
+  const { descending } = librarySort();
+  let key = librarySort().key;
   if (key === "organism" && !rows.some((it) => it.organism)) key = "name";  // trees, figures...: by name
   const added = new Map(items.map((it, i) => [it.id, i]));
   const value = { added: (it) => added.get(it.id), name: (it) => it.label, modified: (it) => it.mtime,
@@ -198,25 +200,30 @@ function sortRows(rows) {
 }
 
 function librarySortTitle() {
-  const [, title, ways] = LIBRARY_SORTS.find(([key]) => key === librarySort.key) || LIBRARY_SORTS[0];
-  return `Rows in each section: ${title.toLowerCase()}, ${ways[librarySort.descending ? 1 : 0]}`;
+  const sort = librarySort(), [, title, ways] = LIBRARY_SORTS.find(([key]) => key === sort.key) || LIBRARY_SORTS[0];
+  return `Rows in ${currentFolder ? baseName(currentFolder) : "the library's top"}: ${title.toLowerCase()}, ${ways[sort.descending ? 1 : 0]}`;
 }
 
+// Only the orders that apply to what the folder holds (organism: some row has one; size: some row has a number)
 function openLibrarySortMenu(e) {
-  const entries = LIBRARY_SORTS.map(([key, title, ways, first]) => {
-    const current = librarySort.key === key;
-    const shown = current ? librarySort.descending : first;
-    return [`${current ? "✓" : "  "} ${title} (${ways[shown ? 1 : 0]})`, () => setLibrarySort(key, current ? !shown : first)];
-  });
+  const rows = items.filter((it) => !listOwner(it) && inFolder(it)), sort = librarySort();
+  const applies = { organism: rows.some((it) => it.organism), size: rows.some((it) => rowSize(it) != null) };
+  const entries = [{ heading: `Order in ${currentFolder ? baseName(currentFolder) : "the library's top"}` }];
+  for (const [key, title, ways, first] of LIBRARY_SORTS) {
+    const current = sort.key === key;
+    if (applies[key] === false && !current) continue;
+    const shown = current ? sort.descending : first;
+    entries.push([`${current ? "✓" : "  "} ${title} (${ways[shown ? 1 : 0]})`, () => setLibrarySort(key, current ? !shown : first)]);
+  }
   entries.push("-", ["Choose the ticked one again to reverse it", null, true],
-               ["A list's sequences keep their own order", null, true]);
+               ["Each folder keeps its own order", null, true]);
   const box = e.currentTarget.getBoundingClientRect();
   showMenu({ clientX: box.left, clientY: box.bottom + 2 }, entries);
 }
 
 function setLibrarySort(key, descending) {
-  Object.assign(librarySort, { key, descending });
-  try { localStorage.setItem("cladia.librarySort", JSON.stringify(librarySort)); } catch (e) {}
+  folderSorts[currentFolder ?? ""] = { key, descending };
+  saveLibraryView();
   $("library-sort").title = librarySortTitle();
   renderList();
 }
