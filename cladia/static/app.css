@@ -193,11 +193,7 @@ section.grow { flex: 1; overflow-y: auto; outline: none; }
   flex: 1; min-width: 0; padding: 5px 8px;
   border: 1px solid var(--border); border-radius: 4px; font: inherit;
 }
-#show-descriptions { flex: none; padding: 3px 8px; font-size: 12px; }
-#show-descriptions.active { background: var(--accent-soft); border-color: var(--accent); }
-/* a sequence's description under its name (Descriptions) */
-.file-list li .sub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; font-weight: normal;
-  color: var(--muted); margin-top: -1px; }
+#library-sort { flex: none; padding: 3px 8px; font-size: 12px; }
 /* Mapping summary */
 .tool-dialog.wide { width: min(760px, 90vw); }
 #mapping-summary table { border-collapse: collapse; margin-bottom: 8px; }

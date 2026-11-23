@@ -331,10 +331,17 @@ items keep their current names; use Rename to change an older suffixed name.
   mapping's mean depth and coverage, a comparison's genomes and blocks, BLAST
   hits, primer pairs or PCR products, reads, variant sites, and what a figure
   shows.
-- **Descriptions** (the button next to the filter, remembered): each sequence's
-  description under its name, small and grey, without the organism it starts
-  with when the row already shows it. A FASTA header's `[Organism]` goes
-  to the organism, not the description.
+- **Sort ▾** (next to the filter, remembered) orders the rows inside each section:
+  order added (the default), name (`k141_2` before `k141_10`), last modified,
+  size (the number the row shows: length, tips, hits...) or organism (sections
+  without organisms go by name). Choosing the ticked order again reverses it.
+  Rows without the value go last. A list's own sequences keep their order: that
+  one is the viewer's Sort ▾, which tools and Export follow. A FASTA header's
+  `[Organism]` goes to the organism, not the description; the hover card shows
+  the description.
+- **Keys in the list**: ↑ ↓ move the selection (Shift+↑ ↓ extend it within a
+  section), Home / End go to the first and last rows, → opens a list and then
+  goes into it, ← closes it or goes up to its list.
 - **The list's width**: drag the sidebar's right edge (remembered; double-click it
   for the usual width). Long names end in "…"; a list's count and the *new* badge
   stay visible.
@@ -343,7 +350,7 @@ items keep their current names; use Rename to change an older suffixed name.
 - **Hovering an item** in the list shows a card: for a sequence its organism,
   description, length, topology, features and accession; for a list or alignment
   how many sequences, their lengths and organisms; for a tree its tips; for a mapping
-  its numbers. The **Filter** box also finds sequences by organism and description,
+  its numbers. The **Filter** box also finds sequences by organism, description and accession,
   and alignments by the names, organisms and descriptions of their rows.
 - **Show ▾ › Names** (bar above the viewer) chooses what the viewer's names column shows:
   any of name, organism and description, joined by " | " (also in the identity

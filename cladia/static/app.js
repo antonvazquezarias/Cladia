@@ -138,7 +138,7 @@ const listMembers = (list) => list.kind === "list" ? childrenOf(list)
 // The rows of one section, in display order
 function visibleRows(name) {
   const filter = $("filter").value.trim().toLowerCase();
-  const hit = (it) => [it.label, it.organism, it.description, it.search].some((s) => s && s.toLowerCase().includes(filter));
+  const hit = (it) => [it.label, it.organism, it.description, it.accession, it.search].some((s) => s && s.toLowerCase().includes(filter));
   const rows = [];
   function add(it, parentMatches = false) {
     const matches = parentMatches || hit(it);
@@ -149,8 +149,76 @@ function visibleRows(name) {
     }
     if (!matches && rows.length === start + 1) rows.pop();
   }
-  for (const it of items.filter((x) => !listOwner(x) && section(x) === name && inFolder(x))) add(it);
+  for (const it of sortRows(items.filter((x) => !listOwner(x) && section(x) === name && inFolder(x)))) add(it);
   return rows;
+}
+
+// ── The rows' order in each section (Sort ▾ beside the filter; remembered) ──
+// The sections by kind stay; within each, its top-level rows follow the order
+// chosen. A list's own sequences keep the file's order (the viewer's Sort ▾,
+// which tools and Export follow): this only arranges the sidebar.
+const LIBRARY_SORTS = [  // key, title, [ascending, descending], the first way descending
+  ["added", "Order added", ["oldest first", "newest first"], false],
+  ["name", "Name", ["A to Z", "Z to A"], false],
+  ["modified", "Last modified", ["oldest first", "newest first"], true],
+  ["size", "Size", ["smallest first", "largest first"], true],
+  ["organism", "Organism", ["A to Z", "Z to A"], false],
+];
+const librarySort = { key: "added", descending: false };
+try { Object.assign(librarySort, JSON.parse(localStorage.getItem("cladia.librarySort")) || {}); } catch (e) {}
+const naturally = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });  // k141_2 before k141_10
+
+// The number each row shows: bp, tips, hits... (so Size means something in every section)
+function rowSize(it) {
+  if (it.kind === "sequence") return it.length;
+  const f = rowFacts[it.id] || {};
+  return { list: f.total, alignment: f.count, tree: f.tips, graph: f.total, mapping: f.mean_depth, comparison: f.genomes,
+           blast: f.hits, primers: f.mode === "design" ? f.pairs : f.products, reads: f.bases, variants: f.sites }[it.kind];
+}
+
+function sortRows(rows) {
+  const { descending } = librarySort;
+  let key = librarySort.key;
+  if (key === "organism" && !rows.some((it) => it.organism)) key = "name";  // trees, figures...: by name
+  const added = new Map(items.map((it, i) => [it.id, i]));
+  const value = { added: (it) => added.get(it.id), name: (it) => it.label, modified: (it) => it.mtime,
+                  size: rowSize, organism: (it) => it.organism }[key] || ((it) => added.get(it.id));
+  const compare = (a, b) => typeof a === "string" ? naturally.compare(a, b) : a - b;
+  const missing = (v) => v == null || v === "";
+  return [...rows].sort((a, b) => {
+    const va = value(a), vb = value(b);
+    if (missing(va) || missing(vb)) {  // rows without it go last, either way
+      if (!missing(va) || !missing(vb)) return missing(va) ? 1 : -1;
+    } else {
+      const order = compare(va, vb);
+      if (order) return descending ? -order : order;
+    }
+    return naturally.compare(a.label, b.label) || added.get(a.id) - added.get(b.id);
+  });
+}
+
+function librarySortTitle() {
+  const [, title, ways] = LIBRARY_SORTS.find(([key]) => key === librarySort.key) || LIBRARY_SORTS[0];
+  return `Rows in each section: ${title.toLowerCase()}, ${ways[librarySort.descending ? 1 : 0]}`;
+}
+
+function openLibrarySortMenu(e) {
+  const entries = LIBRARY_SORTS.map(([key, title, ways, first]) => {
+    const current = librarySort.key === key;
+    const shown = current ? librarySort.descending : first;
+    return [`${current ? "✓" : "  "} ${title} (${ways[shown ? 1 : 0]})`, () => setLibrarySort(key, current ? !shown : first)];
+  });
+  entries.push("-", ["Choose the ticked one again to reverse it", null, true],
+               ["A list's sequences keep their own order", null, true]);
+  const box = e.currentTarget.getBoundingClientRect();
+  showMenu({ clientX: box.left, clientY: box.bottom + 2 }, entries);
+}
+
+function setLibrarySort(key, descending) {
+  Object.assign(librarySort, { key, descending });
+  try { localStorage.setItem("cladia.librarySort", JSON.stringify(librarySort)); } catch (e) {}
+  $("library-sort").title = librarySortTitle();
+  renderList();
 }
 
 function renderList() {
@@ -198,10 +266,6 @@ function renderList() {
       }
       if (fresh.items.includes(it.id) && !it.missing && renaming !== it.id) {
         line.append(Object.assign(document.createElement("span"), { className: "badge", textContent: "new" }));
-      }
-      const description = rowDescription(it);
-      if (showDescriptions && description && renaming !== it.id) {  // under the name, on its own line
-        li.append(Object.assign(document.createElement("span"), { className: "sub", textContent: description }));
       }
       if (it.missing) li.title = `Cladia's copy is gone: ${it.path}`;  // (others: the hover card, not a second tooltip)
       const depth = listAncestors(it).length;
@@ -252,16 +316,6 @@ function updateSelection() {
       li.classList.toggle("selected", chosen.has(li.dataset.id));
     }
   }
-}
-
-// Descriptions: each sequence's description under its name (remembered)
-let showDescriptions = localStorage.getItem("cladia.descriptions") === "1";
-
-function toggleDescriptions() {
-  showDescriptions = !showDescriptions;
-  try { localStorage.setItem("cladia.descriptions", showDescriptions ? "1" : "0"); } catch (e) {}
-  $("show-descriptions").classList.toggle("active", showDescriptions);
-  renderList();
 }
 
 // A row's name: shortened with "…" when the row is too narrow, so what follows
@@ -335,12 +389,6 @@ function lengthText(n, protein) {
   if (n < 10000) return `${n.toLocaleString()} bp`;
   if (n < 1e6) return `${n < 1e5 ? (n / 1e3).toFixed(1) : Math.round(n / 1e3)} kb`;
   return `${(n / 1e6).toFixed(1)} Mb`;
-}
-
-// The description line, without the organism it starts with when the row already shows it
-function rowDescription(it) {
-  const d = it.description || "";
-  return it.organism && d.toLowerCase().startsWith(it.organism.toLowerCase()) ? d.slice(it.organism.length).replace(/^[\s,;:.-]+/, "") : d;
 }
 
 // ── The sidebar's width: drag its right edge (remembered) ────────────────
@@ -718,8 +766,48 @@ function clickItem(it, e) {
     selected = [it.id];
     anchorId = it.id;
   }
+  listCursor = it.id;
   if (!showSelection()) { selected = previous; anchorId = previousAnchor; lastClick = {id: null, at: 0}; }
   updateSelection();
+}
+
+// Keys in the list: ↑ ↓ move (Shift extends, within a section, as Shift+click),
+// Home / End; → opens a list, then goes into it; ← closes it, or goes up to its list.
+const LIST_KEYS = ["ArrowDown", "ArrowUp", "Home", "End", "ArrowRight", "ArrowLeft"];
+let listCursor = null;  // the row the keys move from: the last one clicked or reached
+
+function moveInList(e) {
+  const rows = Object.keys(LIST_ELEMENTS).flatMap(visibleRows).filter((it) => !it.missing);
+  if (!rows.length) return;
+  const at = rows.findIndex((it) => it.id === (selected.includes(listCursor) ? listCursor : selected.at(-1)));
+  const here = rows[at];
+  let next;
+  if (e.key === "ArrowDown") next = at < 0 ? rows[0] : rows[at + 1];
+  else if (e.key === "ArrowUp") next = at < 0 ? rows.at(-1) : rows[at - 1];
+  else if (e.key === "Home") next = rows[0];
+  else if (e.key === "End") next = rows.at(-1);
+  else if (e.key === "ArrowRight" && here && isLibraryList(here)) {
+    if (!expanded.has(here.id) && !$("filter").value.trim()) { expanded.add(here.id); return renderList(); }
+    next = listOwner(rows[at + 1]) === here.id ? rows[at + 1] : null;
+  } else if (e.key === "ArrowLeft" && here) {
+    if (isLibraryList(here) && expanded.has(here.id)) { expanded.delete(here.id); return renderList(); }
+    next = itemById(listOwner(here));
+  }
+  if (!next || busyLists.has(next.parent) || busyLists.has(next.id)) return;
+  const previous = [...selected], previousAnchor = anchorId;
+  if (e.shiftKey && anchorId && (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End")) {
+    const ids = visibleRows(section(next)).map((x) => x.id);
+    if (!ids.includes(anchorId)) return;  // a range stays in one section
+    const [a, b] = [ids.indexOf(anchorId), ids.indexOf(next.id)].sort((x, y) => x - y);
+    selected = ids.slice(a, b + 1);
+  } else {
+    selected = [next.id];
+    anchorId = next.id;
+  }
+  listCursor = next.id;
+  if (!showSelection()) { selected = previous; anchorId = previousAnchor; return; }
+  updateSelection();
+  document.querySelector(`#lists li[data-id="${CSS.escape(next.id)}"]`)?.scrollIntoView({ block: "nearest" });
 }
 
 // Removing deletes Cladia's copies; files outside Cladia are never touched

@@ -28,8 +28,8 @@ document.addEventListener("click", e => {
 
 // ── Startup ──────────────────────────────────────────────────────────────
 $("filter").oninput = () => { anchorId = null; renderFolderButton(); renderList(); scheduleToolStates(); };
-$("show-descriptions").onclick = toggleDescriptions;
-$("show-descriptions").classList.toggle("active", showDescriptions);
+$("library-sort").onclick = openLibrarySortMenu;
+$("library-sort").title = librarySortTitle();
 $("open-archive").onclick = openArchive;
 $("clear-jobs").onclick = clearJobs;
 $("trash-restore").onclick = restoreTrash;
@@ -167,6 +167,12 @@ $("lists").addEventListener("keydown", (e) => {
     anchorId = all[0] || null;
     if (!showSelection()) { selected = previous; anchorId = previousAnchor; }
     updateSelection();
+    return;
+  }
+  if (LIST_KEYS.includes(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey &&
+      !["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) {
+    e.preventDefault();
+    moveInList(e);
     return;
   }
   if (e.key === "Delete") removeSelected();
