@@ -284,7 +284,7 @@ function rowDetails(it) {
     parts.push(span("org", it.organism || ""));  // empty, it still pushes the size to the right
     if (it.trace) parts.push(span("tag", "read"));
     if (it.circular) parts.push(span("ring"));
-    parts.push(span("size", sizeText(it.length, it.protein)));
+    parts.push(span("size", lengthText(it.length, it.protein)));
     return parts;
   }
   const facts = rowFacts[it.id], text = facts && factsText(it.kind, facts);
@@ -314,15 +314,15 @@ function countText(n) {
 function factsText(kind, f) {
   const plural = (n, word) => `${countText(n)} ${word}${n === 1 ? "" : "s"}`;
   switch (kind) {
-    case "list": return f.total != null ? sizeText(f.total, f.unit === "aa") : "";
+    case "list": return f.total != null ? lengthText(f.total, f.unit === "aa") : "";
     case "alignment": return f.count != null ? `${countText(f.count)} × ${countText(f.columns)} cols` : "";
     case "tree": return f.tips != null ? plural(f.tips, "tip") : "";
-    case "graph": return f.nodes != null ? `${plural(f.nodes, "node")} · ${sizeText(f.total || 0)}` : "";
+    case "graph": return f.nodes != null ? `${plural(f.nodes, "node")} · ${lengthText(f.total || 0)}` : "";
     case "mapping": return f.mean_depth != null ? `${f.mean_depth}× · ${f.covered_percent} % covered` : "";
     case "comparison": return f.genomes ? `${plural(f.genomes, "genome")} · ${plural(f.blocks || 0, "block")}` : "";
     case "blast": return f.hits != null ? plural(f.hits, "hit") : "";
     case "primers": return f.mode === "design" ? plural(f.pairs || 0, "pair") : plural(f.products || 0, "product");
-    case "reads": return f.reads != null ? `${plural(f.reads, "read")} · ${sizeText(f.bases || 0)}` : "";
+    case "reads": return f.reads != null ? `${plural(f.reads, "read")} · ${lengthText(f.bases || 0)}` : "";
     case "variants": return f.sites != null ? plural(f.sites, "site") : "";
     case "figure": return { tree: "tree", genome: "genome map", comparison: "comparison", dotplot: "dot plot" }[f.of] || "";
   }
@@ -330,7 +330,7 @@ function factsText(kind, f) {
 }
 
 // 679 bp, 1,207 bp (exact for genes and barcodes), 15.8 kb, 152 kb, 1.2 Mb; proteins in aa
-function sizeText(n, protein) {
+function lengthText(n, protein) {
   if (protein) return `${n.toLocaleString()} aa`;
   if (n < 10000) return `${n.toLocaleString()} bp`;
   if (n < 1e6) return `${n < 1e5 ? (n / 1e3).toFixed(1) : Math.round(n / 1e3)} kb`;
