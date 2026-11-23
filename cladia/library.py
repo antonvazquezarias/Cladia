@@ -1612,6 +1612,52 @@ def info(item):
     return {"kind": kind}
 
 
+# ── Row facts (23 Nov 2026): a few numbers on each list row ──────────────
+# Sequences carry theirs in items(); every other kind's come from info() (the
+# hover card's), trimmed and cached by the file's path, mtime and size, so only
+# changed files are read again. The page asks for them after drawing the list.
+_row_facts = {}
+
+
+def _facts_of(item):
+    kind = item["kind"]
+    if kind == "figure":
+        return {"of": figure_data(item).get("of") or ""}
+    if kind == "variants":
+        return {"sites": item.get("sites")}
+    if kind == "reads":
+        data = json.loads(Path(item["path"]).read_text(encoding="utf-8"))
+        stats = data.get("stats") or []
+        return {"reads": sum(s["reads"] for s in stats), "bases": sum(s["bases"] for s in stats),
+                "paired": bool(data.get("paired")), "long": bool(data.get("long"))}
+    i = info(item)
+    keep = {"list": ("total", "unit"), "alignment": ("count", "columns"), "tree": ("tips",),
+            "graph": ("nodes", "total"), "mapping": ("mean_depth", "covered_percent"),
+            "comparison": ("genomes", "blocks"), "blast": ("hits",), "primers": ("mode", "pairs", "products")}
+    facts = {k: i.get(k) for k in keep.get(kind, ())}
+    if kind == "comparison":
+        facts["genomes"] = len(facts["genomes"] or [])
+    return facts
+
+
+def row_facts(found=None):
+    """{item id: facts} for every item but sequences (see above); an item that
+    can't be read is left out."""
+    result = {}
+    for item in found if found is not None else items():
+        if item["kind"] in ("sequence", "item_list") or item["missing"]:
+            continue
+        try:
+            st = Path(item["path"]).stat()
+            key = (item["path"], st.st_mtime_ns, st.st_size, item.get("sites"))
+            if _row_facts.get(item["id"], (None,))[0] != key:
+                _row_facts[item["id"]] = (key, _facts_of(item))
+            result[item["id"]] = _row_facts[item["id"]][1]
+        except Exception:  # (a half-written or odd file: no numbers on its row)
+            continue
+    return result
+
+
 def mapping_data(item):
     return json.loads(Path(item["path"]).read_text(encoding="utf-8"))
 

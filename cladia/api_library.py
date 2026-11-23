@@ -38,6 +38,12 @@ def list_items(response: Response):
     return found
 
 
+@router.get("/api/library/facts")
+def list_row_facts():
+    """A few numbers for each row that isn't a sequence (tips, hits, depth...)."""
+    return library.row_facts()
+
+
 @router.get("/api/library/check")
 def check_library():
     return library.check_integrity()

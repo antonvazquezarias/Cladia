@@ -102,6 +102,7 @@ async function loadList() {
   if (!$("folder-popup").hidden) renderFolderTree();
   selected = selected.filter((id) => itemById(id));  // drop ids that are gone
   renderList();
+  loadRowFacts();  // the other kinds' numbers come after (the list is drawn at once)
   if (metadataItem) {
     const current = itemById(metadataItem.id), location = $("metadata-details").querySelector('[data-fact="Folder"]');
     if (current && location) location.lastChild.textContent = current.folder || "Library";
@@ -188,6 +189,7 @@ function renderList() {
         const count = document.createElement("small");
         count.textContent = renaming === it.id ? "" : `(${it.count})`;
         line.append(count);
+        if (renaming !== it.id && !it.missing) line.append(...rowDetails(it));
       } else if (renaming === it.id) {
         line.append(renameInput(it));
       } else {
@@ -271,17 +273,60 @@ function rowName(text) {
 // ── Row details (23 Nov 2026): what a sequence row says besides its name ──
 // The organism (italic, only in the room the name leaves), then at the right
 // a "read" tag for Sanger reads, a ring for circular sequences and the size
-// ("aa" marks a protein). To go back to name-only rows, drop the rowDetails
-// call in renderList and the .org/.size/.tag/.ring rules in app.css.
+// ("aa" marks a protein). Other kinds show a few numbers from rowFacts
+// (tips, hits, depth...). To go back to name-only rows, drop the rowDetails
+// calls in renderList and the .org/.size/.tag/.ring rules in app.css.
 function rowDetails(it) {
-  if (it.kind !== "sequence" || it.length == null) return [];
   const span = (className, textContent = "") => Object.assign(document.createElement("span"), { className, textContent });
   const parts = [];
-  parts.push(span("org", it.organism || ""));  // empty, it still pushes the size to the right
-  if (it.trace) parts.push(span("tag", "read"));
-  if (it.circular) parts.push(span("ring"));
-  parts.push(span("size", sizeText(it.length, it.protein)));
+  if (it.kind === "sequence") {
+    if (it.length == null) return [];
+    parts.push(span("org", it.organism || ""));  // empty, it still pushes the size to the right
+    if (it.trace) parts.push(span("tag", "read"));
+    if (it.circular) parts.push(span("ring"));
+    parts.push(span("size", sizeText(it.length, it.protein)));
+    return parts;
+  }
+  const facts = rowFacts[it.id], text = facts && factsText(it.kind, facts);
+  if (!text) return [];
+  parts.push(span("org"));
+  if (it.kind === "reads" && (facts.paired || facts.long)) parts.push(span("tag", facts.long ? "long" : "paired"));
+  parts.push(span("size", text));
   return parts;
+}
+
+// ── Facts of the other kinds (/api/library/facts, cached by the server) ──
+let rowFacts = {};
+
+async function loadRowFacts() {
+  let facts;
+  try { facts = await api("GET", "/api/library/facts"); } catch (e) { return; }
+  if (JSON.stringify(facts) === JSON.stringify(rowFacts)) return;
+  rowFacts = facts;
+  renderList();
+}
+
+// 950, 12.3 k, 1.5 M
+function countText(n) {
+  return n < 1e4 ? n.toLocaleString() : n < 1e6 ? `${(n / 1e3).toFixed(n < 1e5 ? 1 : 0)} k` : `${(n / 1e6).toFixed(1)} M`;
+}
+
+function factsText(kind, f) {
+  const plural = (n, word) => `${countText(n)} ${word}${n === 1 ? "" : "s"}`;
+  switch (kind) {
+    case "list": return f.total != null ? sizeText(f.total, f.unit === "aa") : "";
+    case "alignment": return f.count != null ? `${countText(f.count)} × ${countText(f.columns)} cols` : "";
+    case "tree": return f.tips != null ? plural(f.tips, "tip") : "";
+    case "graph": return f.nodes != null ? `${plural(f.nodes, "node")} · ${sizeText(f.total || 0)}` : "";
+    case "mapping": return f.mean_depth != null ? `${f.mean_depth}× · ${f.covered_percent} % covered` : "";
+    case "comparison": return f.genomes ? `${plural(f.genomes, "genome")} · ${plural(f.blocks || 0, "block")}` : "";
+    case "blast": return f.hits != null ? plural(f.hits, "hit") : "";
+    case "primers": return f.mode === "design" ? plural(f.pairs || 0, "pair") : plural(f.products || 0, "product");
+    case "reads": return f.reads != null ? `${plural(f.reads, "read")} · ${sizeText(f.bases || 0)}` : "";
+    case "variants": return f.sites != null ? plural(f.sites, "site") : "";
+    case "figure": return { tree: "tree", genome: "genome map", comparison: "comparison", dotplot: "dot plot" }[f.of] || "";
+  }
+  return "";
 }
 
 // 679 bp, 1,207 bp (exact for genes and barcodes), 15.8 kb, 152 kb, 1.2 Mb; proteins in aa

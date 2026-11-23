@@ -326,6 +326,11 @@ items keep their current names; use Rename to change an older suffixed name.
 - **What a sequence row shows**: its name, then its organism in italics (in the
   room the name leaves), and at the right a *read* tag for Sanger reads, a small
   ring for circular sequences and the length (bp, kb or Mb; *aa* for proteins).
+  Other rows give a few numbers at the right too: a list's total length, an
+  alignment's sequences × columns, a tree's tips, a graph's nodes and bases, a
+  mapping's mean depth and coverage, a comparison's genomes and blocks, BLAST
+  hits, primer pairs or PCR products, reads, variant sites, and what a figure
+  shows.
 - **Descriptions** (the button next to the filter, remembered): each sequence's
   description under its name, small and grey, without the organism it starts
   with when the row already shows it. A FASTA header's `[Organism]` goes
