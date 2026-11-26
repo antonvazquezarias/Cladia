@@ -8,9 +8,13 @@ It also opens the extra view windows (New window); a browser opens a tab instead
 
 import ctypes
 import json
+import os
 import uuid
-from ctypes import wintypes
 from pathlib import Path
+
+WINDOWS = os.name == "nt"  # elsewhere (Linux: GTK and WebKit) the Windows-only parts are skipped
+if WINDOWS:
+    from ctypes import wintypes
 
 import webview
 from webview.dom import DOMEventHandler
@@ -126,6 +130,8 @@ _subclasses = []  # the window procedures given to Windows: kept, or they'd be f
 
 def per_monitor_dpi():
     """Before the first window: real pixels on every screen (Windows 10 1703+)."""
+    if not WINDOWS:
+        return
     try:
         ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))  # PER_MONITOR_AWARE_V2
     except (AttributeError, OSError):
@@ -140,7 +146,9 @@ ICON = Path(__file__).parent / "static" / "cladia.ico"
 
 def set_icon(window):
     """Cladia's icon on a window's title bar and taskbar button (pywebview's
-    WinForms windows otherwise take python's)."""
+    WinForms windows otherwise take python's). Linux: the .desktop file's icon."""
+    if not WINDOWS:
+        return
     from System import Action
     from System.Drawing import Icon
     form = window.native
@@ -151,6 +159,8 @@ def follow_dpi(window):
     """The window, moved to a screen with other scaling, takes the size Windows
     suggests (WM_DPICHANGED). Runs when the window is shown; hooked in on its own
     thread (a window can only be subclassed there)."""
+    if not WINDOWS:
+        return  # (GTK follows each screen's scaling itself)
     from System import Action  # .NET, through pywebview's pythonnet
 
     comctl32, user32 = ctypes.windll.comctl32, ctypes.windll.user32
@@ -177,9 +187,18 @@ def apply_text_size(*windows):
     """The Settings' text size as the windows' zoom (all of Cladia's when none
     are named): WebView2's own, as a browser's Ctrl + +, so text, controls and the
     canvas viewers grow together (the viewers follow devicePixelRatio)."""
-    from System import Action
     from . import config
     factor = (config.setting("text_size") or 100) / 100
+    if not WINDOWS:
+        # GTK: WebKit's own zoom, set on GTK's thread
+        from gi.repository import GLib
+        from webview.platforms.gtk import BrowserView
+        for window in windows or list(webview.windows):
+            view = BrowserView.instances.get(window.uid)
+            if view:
+                GLib.idle_add(view.webview.set_zoom_level, factor)
+        return
+    from System import Action
     for window in windows or list(webview.windows):
         try:
             form = window.native

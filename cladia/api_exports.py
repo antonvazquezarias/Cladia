@@ -4,11 +4,11 @@ from .request_context import _item
 from . import internal_jobs
 from collections import Counter
 import shutil
-import subprocess
 from pathlib import Path
 from fastapi import HTTPException
 from pydantic import BaseModel
 from . import jobs, library, submission
+from .reveal import show as show_in_folder
 
 from fastapi import APIRouter
 
@@ -101,7 +101,7 @@ def reveal(item_id: str):
     _, original = _original(item_id)
     if not Path(original["path"]).exists():
         raise HTTPException(400, f"The original is no longer there: {original['path']}")
-    subprocess.Popen(f'explorer /select,"{original["path"]}"')
+    show_in_folder(original["path"], select=True)
     return {}
 
 

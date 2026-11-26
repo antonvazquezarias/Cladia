@@ -8,7 +8,7 @@ starlette==1.10.0
 pydantic==2.14.3
 uvicorn==0.54.0
 pywebview==6.2.1
-pythonnet==3.2.1     # pywebview's bridge to the Windows window
+pythonnet==3.2.1; sys_platform == "win32"  # pywebview's bridge to the Windows window (Linux: GTK, from apt)
 svglib==2.4.0        # figures as PDF (SVG drawn with reportlab)
 reportlab==5.1.0
 pillow==13.0.0       # figures as PNG and TIFF

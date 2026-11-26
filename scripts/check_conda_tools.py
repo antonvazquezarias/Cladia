@@ -36,8 +36,7 @@ def wait(job, limit=3600):
 
 
 def env_exists(engine_id, version):
-    proc = linux.wsl("-d", linux.DISTRO, "-u", "root", "--exec", "sh", "-c",
-                     f"test -f {conda.env_path(engine_id, version)}/.cladia-lock && echo yes || echo no")
+    proc = linux._host("sh", "-c", f"test -f {conda.env_path(engine_id, version)}/.cladia-lock && echo yes || echo no")
     return proc.stdout.strip() == "yes"
 
 
@@ -103,15 +102,15 @@ def check_krait():
 
 def check_getorganelle():
     engine = install("getorganelle", ["other_pt"])
-    proc = linux.wsl("-d", linux.DISTRO, "-u", "root", "--exec", "sh", "-c",
+    proc = linux._host("sh", "-c",
                      f"PATH={conda.env_path('getorganelle', '1.7.7.1')}/bin:/usr/bin:/bin get_organelle_from_reads.py --version")
     assert "1.7.7.1" in proc.stdout + proc.stderr, proc.stdout + proc.stderr
     vol = f"{linux.VOLUMES}/cladia-getorganelle-databases-{conda.data_key()}"
-    listed = linux.wsl("-d", linux.DISTRO, "-u", "root", "--exec", "sh", "-c", f"ls {vol}").stdout
+    listed = linux._host("sh", "-c", f"ls {vol}").stdout
     assert listed.strip(), "no database files"
     print(f"getorganelle: version ok, other_pt database in place ({' '.join(listed.split()[:4])}…)")
     uninstall("getorganelle", "1.7.7.1")
-    gone = linux.wsl("-d", linux.DISTRO, "-u", "root", "--exec", "sh", "-c", f"test -e {vol} && echo left || echo gone").stdout.strip()
+    gone = linux._host("sh", "-c", f"test -e {vol} && echo left || echo gone").stdout.strip()
     assert gone == "gone", "database volume left behind"
 
 

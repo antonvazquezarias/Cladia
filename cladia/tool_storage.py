@@ -74,7 +74,9 @@ done''')
   printf '%s\\t%s\\n' {shlex.quote(engine_id)} "$amount"
 fi''')
         try:
-            proc = linux.wsl("-d", linux.DISTRO, "-u", "root", "--exec", "sh", "-c", "\n".join(lines), timeout=25)
+            if linux.PODMAN:
+                linux._start()  # (a Linux PC's container, stopped since the PC restarted)
+            proc = linux._host("sh", "-c", "\n".join(lines), timeout=25)
             if proc.returncode:
                 raise RuntimeError(proc.stderr.strip())
             measured = {}

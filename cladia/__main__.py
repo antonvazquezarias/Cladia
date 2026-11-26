@@ -31,9 +31,25 @@ CLOSING_WAIT = 15  # s a new Cladia waits for one that is still closing
 def take_instance(path=None, prefix="Cladia"):
     """True if this process may use the data folder, False if another Cladia has it.
     A Windows named mutex per data folder; the OS releases it when the process ends.
-    Other systems aren't guarded: Cladia's app window is Windows-only."""
+    Linux: a locked file in the data folder's .cladia, released the same way."""
     global _instance, _legacy_instance
     if os.name != "nt":
+        import fcntl
+        lock = Path(path or config.DATA_DIR) / ".cladia" / "instance.lock"
+        try:
+            lock.parent.mkdir(parents=True, exist_ok=True)
+            handle = open(lock, "a")
+        except OSError:
+            return True  # couldn't check: don't stop Cladia for that
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            handle.close()
+            return False
+        if prefix == "Cladia":
+            _instance = handle
+        else:
+            _legacy_instance = handle
         return True
     import ctypes
     from ctypes import wintypes
@@ -198,8 +214,9 @@ def main():
         except OSError as exc:
             print(f"Could not rename the settings folder yet: {exc}. Cladia will use it in place.")
 
-    # Started without a console (pythonw / run.bat): send output to a log file
-    if sys.stdout is None:
+    # Started without a console (pythonw / run.bat, or the Linux applications menu,
+    # whose entry sets CLADIA_LOG_FILE): send output to a log file
+    if sys.stdout is None or os.environ.get("CLADIA_LOG_FILE") == "1":
         config.APP_DIR.mkdir(parents=True, exist_ok=True)
         log = open(config.APP_DIR / "cladia.log", "a", buffering=1, encoding="utf-8")
         sys.stdout = sys.stderr = log
@@ -215,6 +232,11 @@ def main():
 
     from .window import per_monitor_dpi
     per_monitor_dpi()  # before pywebview sets its own DPI mode (see window.py)
+    if os.name != "nt":
+        # Linux (GTK/WebKit): WebKit's GPU buffer sharing leaves the page blank where the
+        # graphics driver can't do it (WSLg, some NVIDIA and virtual machines); without it
+        # the page draws everywhere, and Cladia's canvas viewers don't need it
+        os.environ.setdefault("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
 
     import webview  # pywebview; uses Edge WebView2 on Windows
 

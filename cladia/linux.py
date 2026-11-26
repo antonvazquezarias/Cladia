@@ -8,6 +8,12 @@ mount namespaces and chroot, keeping each environment's libraries and package
 manager separate. This is dependency isolation, not a sandbox for untrusted code.
 Existing Cladia distributions are exported, checked, and retired only after their
 replacement works. User distributions and the old shared wslc disk are untouched.
+
+On a Linux PC there is no WSL: a long-lived rootless Podman container named
+``cladia`` (Debian, privileged inside its own user namespace) plays the
+distribution's part. The rest is the same: the tools root, the environments under
+/var/lib/cladia, chroot and private mount namespaces, the job's pid file for
+cancelling. The PC's own folders are seen inside it under /host (as /mnt/c in WSL).
 """
 
 import json
@@ -16,6 +22,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from contextlib import contextmanager
@@ -27,8 +34,14 @@ from . import config
 WSL = next((p for p in (Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "WSL" / "wsl.exe",
                         Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "wsl.exe") if p.exists()),
            Path("wsl.exe"))
-LINUX_DIR = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "Cladia" / "linux"
-LEGACY_LINUX_DIR = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "SeqLab" / "linux"
+# A Linux PC: Cladia's Linux is a Podman container (see the top of this file)
+PODMAN = sys.platform.startswith("linux")
+CONTAINER = "cladia"
+BASE_IMAGE = "docker.io/library/debian:bookworm-slim"
+_LOCAL = Path(os.environ.get("LOCALAPPDATA") or Path.home()) if not PODMAN else \
+    Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+LINUX_DIR = _LOCAL / "Cladia" / "linux"
+LEGACY_LINUX_DIR = _LOCAL / "SeqLab" / "linux"
 SETUP = Path(__file__).resolve().parent.parent / "containers" / "lab-tools" / "setup.sh"
 
 DISTRO = "Cladia"
@@ -54,9 +67,21 @@ def wsl(*args, input=None, timeout=None):
                           env={**os.environ, "WSL_UTF8": "1"})
 
 
+def podman(*args, input=None, timeout=None):
+    """The podman program (Linux PCs), its output as text."""
+    try:
+        return subprocess.run(["podman", *args], capture_output=True, input=input, timeout=timeout,
+                              encoding="utf-8", errors="replace")
+    except FileNotFoundError as exc:
+        raise WslPrerequisiteError(_PODMAN_HELP) from exc
+
+
 def linux_path(path):
-    """D:\\x\\y -> /mnt/d/x/y (WSL's own mount of Windows drives)."""
+    """D:\\x\\y -> /mnt/d/x/y (WSL's own mount of Windows drives); on a Linux PC
+    /home/x -> /host/home/x (the container's view of the PC's folders)."""
     p = Path(path).resolve()
+    if PODMAN:
+        return "/host" + p.as_posix()
     drive = p.drive.rstrip(":").lower()
     return f"/mnt/{drive}/" + "/".join(p.parts[1:])
 
@@ -95,6 +120,9 @@ def kind_of(image):
 
 
 def registered(*, timeout=None):
+    if PODMAN:
+        proc = podman("container", "exists", CONTAINER, timeout=timeout)
+        return {DISTRO} if proc.returncode == 0 else set()
     try:
         proc = wsl("--list", "--quiet", timeout=timeout)
     except FileNotFoundError as exc:
@@ -177,8 +205,14 @@ _WSL_SETUP_HELP = (
 )
 
 
+_PODMAN_HELP = (
+    "Cladia's analysis tools need Podman. Run Cladia's install.sh again, or install it "
+    "with: sudo apt install podman"
+)
+
+
 class WslPrerequisiteError(RuntimeError):
-    """Windows is missing a component required to run the tools."""
+    """Windows (or a Linux PC) is missing a component required to run the tools."""
 
 
 def _wsl_output(proc):
@@ -197,11 +231,24 @@ def _checked(proc, action):
 
 
 def _host(*args, **kwargs):
+    if PODMAN:
+        return podman("exec", "--user", "root", CONTAINER, *args, **kwargs)
     return wsl("-d", DISTRO, "-u", "root", "--exec", *args, **kwargs)
 
 
+def _start():
+    """Linux PCs: the container stops when the PC does; started again when needed."""
+    _checked(podman("start", CONTAINER, timeout=120), "Starting Cladia's Linux container")
+
+
 def _owned(name):
-    """Never adopt/unregister a same-named distro stored outside Cladia's directory."""
+    """Never adopt/unregister a same-named distro stored outside Cladia's directory
+    (Linux PCs: a container Cladia didn't make, without its label)."""
+    if PODMAN:
+        proc = podman("container", "inspect", "--format", '{{index .Config.Labels "cladia.owned"}}', CONTAINER)
+        if proc.returncode or proc.stdout.strip() != "1":
+            raise RuntimeError(f"The Podman container {CONTAINER} was not made by Cladia; leaving it untouched")
+        return
     if os.name != "nt":
         raise RuntimeError("WSL migration requires Windows")
     import winreg
@@ -337,6 +384,21 @@ done
             _save(LINUX_DIR / "environments" / f"{kind}.json", previous)
 
 
+def _make_container(marker, report):
+    """Linux PCs: the container standing in for the WSL distribution. Privileged
+    (inside rootless Podman's user namespace) so jobs can mount and chroot; the
+    PC's folders at /host, as the user sees them (it runs as the user)."""
+    report("downloading Debian", None)
+    _checked(podman("pull", BASE_IMAGE, timeout=1800), "Downloading Cladia's Linux")
+    proc = _checked(podman("image", "inspect", "--format", "{{json .Config}}", BASE_IMAGE), "Reading Cladia's Linux")
+    info = _image_info(json.loads(proc.stdout or "{}") or {})
+    _save(marker, {"ready": False, "source": None, "tools": info})
+    _checked(podman("create", "--name", CONTAINER, "--label", "cladia.owned=1", "--hostname", "cladia",
+                    "--privileged", "--init", "--volume", "/:/host:rslave", "--entrypoint", "sleep",
+                    BASE_IMAGE, "infinity", timeout=300), "Creating Cladia's Linux container")
+    _save(LINUX_DIR / "environments" / "tools.json", info)
+
+
 def _ensure_runtime(job_log, report):
     names = registered()
     marker = LINUX_DIR / "runtime.json"
@@ -347,6 +409,9 @@ def _ensure_runtime(job_log, report):
             raise RuntimeError("A Cladia WSL distribution already exists without migration metadata; leaving it untouched")
         if state.get("ready"):
             return
+    elif PODMAN:
+        _make_container(marker, report)
+        state = _read(marker)
     else:
         legacy = _legacy_name("tools", names)
         info = _legacy_info(legacy) if legacy else None
@@ -367,11 +432,14 @@ def _ensure_runtime(job_log, report):
         _adopt_shared_contents()
     if meta("tools") is None and state.get("tools"):
         _save(LINUX_DIR / "environments" / "tools.json", state["tools"])
+    if PODMAN:
+        _start()
     _checked(_host("sh", "-c", "command -v unshare >/dev/null && command -v chroot >/dev/null && command -v mount >/dev/null || "
                    "(apt-get update && apt-get install -y --no-install-recommends util-linux mount ca-certificates)"),
              "Preparing the shared runtime")
-    _checked(_host("sh", "-c", f"printf %s {shlex.quote(WSL_CONF)} > /etc/wsl.conf"), "Configuring Cladia's Linux")
-    _checked(wsl("--terminate", DISTRO), "Restarting Cladia's Linux configuration")
+    if not PODMAN:
+        _checked(_host("sh", "-c", f"printf %s {shlex.quote(WSL_CONF)} > /etc/wsl.conf"), "Configuring Cladia's Linux")
+        _checked(wsl("--terminate", DISTRO), "Restarting Cladia's Linux configuration")
     state["ready"] = True
     _save(marker, state)
     job_log("Cladia's shared Linux is ready.\n")
@@ -518,6 +586,8 @@ def ensure(kind, job_log=lambda text: None, report=lambda text, fraction: None):
         if kind not in _ready or "migration" not in _ready:
             return False
         if DISTRO in registered():
+            if PODMAN:
+                _start()  # (stopped by a restart of the PC since)
             return True
         # An uninstall or external WSL removal can invalidate this process's cache.
         _ready.clear()
@@ -577,8 +647,8 @@ def _command(kind, program, name, binds=()):
     else:
         lines.append('exec chroot ' + shlex.quote(root) + ' /bin/sh -c ' + shlex.quote(inside) + ' sh "$@"')
     script = "\n".join([*(f"{line} || exit 125" for line in lines[:-1]), lines[-1]])
-    return [str(WSL), "-d", DISTRO, "-u", "root", "--exec", "setsid", "--wait", "unshare", "-m", "--propagation",
-            "private", "sh", "-c", script, "sh", *program]
+    host = ["podman", "exec", "--user", "root", CONTAINER] if PODMAN else [str(WSL), "-d", DISTRO, "-u", "root", "--exec"]
+    return [*host, "setsid", "--wait", "unshare", "-m", "--propagation", "private", "sh", "-c", script, "sh", *program]
 
 
 def command(image, args, workdir, name, mounts=None, entrypoint=None):
@@ -625,7 +695,13 @@ def remove_volume(volume):
 
 
 def sizes():
-    """The shared virtual disk, plus any legacy disk still awaiting migration."""
+    """The shared virtual disk, plus any legacy disk still awaiting migration
+    (Linux PCs: the container's files, with Debian's image)."""
+    if PODMAN:
+        proc = podman("container", "inspect", "--size", "--format", "{{.SizeRootFs}}", CONTAINER, timeout=60)
+        size = proc.stdout.strip()
+        return [{"name": "Cladia (Podman container)", "size": int(size), "used": True, "old": False}] \
+            if proc.returncode == 0 and size.isdigit() else []
     found = []
     _load_engines()
     legacy = [d["legacy"] for kind, d in DISTROS.items() if kind != "tools" and d["legacy"]]
@@ -641,5 +717,9 @@ def remove_all():
     """Remove Cladia's distribution; an older app's unmigrated data stays intact."""
     if DISTRO in registered():
         _owned(DISTRO)
-        _checked(wsl("--unregister", DISTRO), f"Removing {DISTRO}")
+        if PODMAN:
+            _checked(podman("rm", "--force", CONTAINER, timeout=120), "Removing Cladia's Linux container")
+            podman("rmi", BASE_IMAGE, timeout=120)  # (kept if something else uses it)
+        else:
+            _checked(wsl("--unregister", DISTRO), f"Removing {DISTRO}")
     _ready.clear()

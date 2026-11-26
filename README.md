@@ -2,7 +2,8 @@
 
 A desktop workbench for sequences, alignments, genome maps and phylogenetic trees.
 Keep a local sequence library, run analysis tools, inspect results and prepare
-figures in one application. Cladia runs on Windows 10 and 11.
+figures in one application. Cladia runs on Windows 10 and 11, and on Linux
+(Ubuntu 24.04+, Debian 13+).
 
 ## What you can do
 
@@ -33,6 +34,13 @@ of a tool takes longer.
 The installer isn't code-signed yet, so Windows SmartScreen may warn about it:
 choose *More info › Run anyway*. See the
 **[installation guide](docs/INSTALLATION.md)** for details and troubleshooting.
+
+**On Linux**, download **Cladia-linux-setup-&lt;date&gt;.sh** from the same release and
+run `sh Cladia-linux-setup-<date>.sh` in a terminal. It installs Cladia for your
+user and adds it to the applications menu. It installs the system packages it
+needs with `apt`, which asks for your password. The analysis tools run in a Podman
+container that Cladia manages. See the
+**[Linux installation guide](docs/INSTALLATION_LINUX.md)**.
 
 ## Using it
 

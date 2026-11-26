@@ -2,6 +2,10 @@
 
     python scripts\\build_installer.py          (build\\Cladia-setup-<date>.exe)
     python scripts\\build_installer.py --lab    (build\\Cladia-lab-setup-<date>.exe)
+    python scripts\\build_installer.py --linux  (build\\Cladia-linux-setup-<date>.sh; --lab too)
+
+--linux makes one shell script for Ubuntu/Debian instead: a short header, then the
+staged program, which it unpacks to run its install.sh (no Inno Setup needed).
 
 --lab adds the files committed in a second repository whose git folder is .lab-git
 in the project folder (engines kept out of this repository, e.g. a lab's own).
@@ -40,7 +44,8 @@ def iscc():
 
 
 LAB = "--lab" in sys.argv[1:]
-if set(sys.argv[1:]) - {"--lab"}:
+LINUX = "--linux" in sys.argv[1:]
+if set(sys.argv[1:]) - {"--lab", "--linux"}:
     sys.exit(__doc__)
 
 
@@ -60,8 +65,46 @@ if LAB:
         sys.exit("--lab: no .lab-git repository in the project folder")
     commit += ", lab " + unpack(["git", "--git-dir", str(ROOT / ".lab-git")])
 version = time.strftime("%Y.%m.%d")
-name = f"Cladia-{'lab-' if LAB else ''}setup-{version}"
+name = f"Cladia-{'lab-' if LAB else ''}{'linux-' if LINUX else ''}setup-{version}"
 (STAGE / "VERSION").write_text(f"{version} ({commit})\n")
+
+# ── Linux: one shell script that unpacks the program appended to it ──────
+LINUX_HEADER = """#!/bin/sh
+# Cladia's installer for Linux (Ubuntu 24.04 or newer, Debian 13 or newer).
+#   sh {name}.sh               install, or update an installed Cladia
+#   sh {name}.sh --uninstall   remove it (never the library, ~/Cladia)
+# The program is appended to this script: unpacked into a temporary folder, its
+# install.sh does the work. Newer installers are looked for beside this one.
+set -eu
+here=$(cd "$(dirname "$0")" && pwd)
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+line=$(awk '/^__CLADIA_PROGRAM__$/ {{ print NR + 1; exit }}' "$0")
+tail -n +"$line" "$0" | tar -xzf - -C "$tmp"
+CLADIA_UPDATES_FROM="$here" sh "$tmp/install.sh" "$@"
+exit 0
+__CLADIA_PROGRAM__
+"""
+
+if LINUX:
+    BUILD.mkdir(exist_ok=True)
+    packed = io.BytesIO()
+    with tarfile.open(fileobj=packed, mode="w:gz") as tar:
+        for path in sorted(STAGE.rglob("*")):
+            info = tar.gettarinfo(path, path.relative_to(STAGE).as_posix())
+            info.uid = info.gid = 0
+            info.uname = info.gname = ""
+            info.mode = 0o755 if path.is_dir() or path.suffix == ".sh" else 0o644
+            if path.is_file():
+                with open(path, "rb") as data:
+                    tar.addfile(info, data)
+            else:
+                tar.addfile(info)
+    target = BUILD / f"{name}.sh"
+    target.write_bytes(LINUX_HEADER.format(name=name).encode() + packed.getvalue())
+    print(f"\n{target} (commit {commit})")
+    sys.exit(0)
+
 catalog = subprocess.run([sys.executable, "-c",
                           "import json; from cladia.tool_registry import build_registry; "
                           "print(json.dumps(build_registry(installed={}).installable()))"],

@@ -7,12 +7,16 @@ date>.exe in that folder is an update. A copy run from the repository (run.bat)
 has neither file and is never told about updates.
 """
 
+import os
 import re
-import subprocess
 from pathlib import Path
 
+from . import reveal as _reveal
+
 PROGRAM = Path(__file__).resolve().parent.parent
-INSTALLER = re.compile(r"(?:Cladia|Cladia-lab|SeqLab)-setup-(\d{4}\.\d{2}\.\d{2})\.exe", re.I)
+# Linux PCs: Cladia-linux-setup-<date>.sh (scripts/build_installer.py --linux)
+INSTALLER = re.compile(r"(?:Cladia|Cladia-lab|SeqLab)-setup-(\d{4}\.\d{2}\.\d{2})\.exe", re.I) if os.name == "nt" else \
+    re.compile(r"(?:Cladia|Cladia-lab)-linux-setup-(\d{4}\.\d{2}\.\d{2})\.sh")
 
 
 def _read(name):
@@ -50,4 +54,4 @@ def reveal():
     newer = status()["newer"]
     if not newer:
         raise ValueError("No newer installer was found")
-    subprocess.Popen(f'explorer /select,"{newer["path"]}"')
+    _reveal.show(newer["path"], select=True)

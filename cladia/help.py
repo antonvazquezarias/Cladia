@@ -10,12 +10,13 @@ import os
 import re
 from pathlib import Path
 
-from . import config
+from . import config, reveal
 
 DOCS = Path(__file__).resolve().parent.parent / "docs"
+INSTALLATION = "INSTALLATION.md" if os.name == "nt" else "INSTALLATION_LINUX.md"  # (this PC's)
 PAGES = {"guide": ("USER_GUIDE.md", "Cladia user guide"),
-         "installation": ("INSTALLATION.md", "Installing Cladia")}
-LINKS = {"USER_GUIDE.md": "/guide", "INSTALLATION.md": "/guide/installation"}
+         "installation": (INSTALLATION, "Installing Cladia")}
+LINKS = {"USER_GUIDE.md": "/guide", INSTALLATION: "/guide/installation"}
 
 STYLE = """
 body { font: 16px/1.55 "Segoe UI", system-ui, sans-serif; color: #1f2933; background: #fff;
@@ -48,5 +49,5 @@ def page(name):
 def show_logs():
     """Opens Cladia's own folder (cladia.log, job logs in logs) in Explorer."""
     config.APP_DIR.mkdir(parents=True, exist_ok=True)
-    os.startfile(config.APP_DIR)
+    reveal.show(config.APP_DIR)
     return str(config.APP_DIR)
